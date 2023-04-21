@@ -39,7 +39,9 @@ drawUI game =
   ]
 
 drawScore :: Game -> Widget Name
-drawScore game = withBorderStyle BS.unicodeRounded
+drawScore game =
+  hLimit 9
+  $ withBorderStyle BS.unicodeRounded
   $ B.borderWithLabel (str "Score")
   $ C.hCenter
   $ padAll 1

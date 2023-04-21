@@ -11,12 +11,13 @@ import Brick
   , hLimit, vBox, hBox, padRight, padLeft, padTop, padAll, Padding(..)
   , withBorderStyle, str
   , attrMap, withAttr, emptyWidget, AttrName, on, fg
-  , (<+>), attrName, joinBorders)
+  , (<+>), (<=>), attrName, joinBorders, padLeftRight, vLimit)
 import qualified Brick.Widgets.Border as B
 import qualified Brick.Widgets.Border.Style as BS
 import qualified Brick.Widgets.Center as C
 import Control.Lens ((^.), (&), (.~))
 import qualified Graphics.Vty as V
+import Data.Array (elems)
 
 type Name = ()
 
@@ -35,8 +36,10 @@ handleEvent _ = return ()
 drawUI :: Game -> [Widget Name]
 drawUI game =
   [
-    C.center $ drawGrid game <+> padLeft (Pad 2) (drawScore game)
-  ]
+    C.center (centralColumn <+> padLeft (Pad 2) (drawScore game))
+  ] where
+    centralColumn = C.hCenter (drawGrid game) <=> padTop (Pad 1) figuresToPlace
+    figuresToPlace = C.hCenter $ withBorderStyle BS.unicodeRounded $ B.border $ hBox $ map (vLimit 6 . C.vCenter . drawFigureToPlace) $ elems $ game ^. figures
 
 drawScore :: Game -> Widget Name
 drawScore game =
@@ -52,16 +55,19 @@ drawGrid game =
   withBorderStyle BS.unicodeRounded
   $ B.border
   $ padAll 0
-  $ vBox cellRows
-  where
-    cellRows = map (hBox . map borderedCell) $ rows game
+  $ drawFigure (game ^. board)
 
-    borderedCell :: Cell -> Widget Name
-    borderedCell = drawCell
+drawFigure :: Figure -> Widget Name
+drawFigure figure = vBox cellRows where
+  cellRows = map (hBox . map drawCell) $ rows figure
 
-    drawCell :: Cell -> Widget Name
-    drawCell Free = withAttr emptyCellAttr $ str "· "
-    drawCell Filled = withAttr filledCellAttr $ str "  "
+drawFigureToPlace :: Maybe Figure -> Widget Name
+drawFigureToPlace Nothing = padAll 3 emptyWidget
+drawFigureToPlace (Just figure) = padLeftRight 2 $ drawFigure figure
+
+drawCell :: Cell -> Widget Name
+drawCell Free = withAttr emptyCellAttr $ str "· "
+drawCell Filled = withAttr filledCellAttr $ str "  "
 
 --- Attributes ---
 

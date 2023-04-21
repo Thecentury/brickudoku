@@ -20,7 +20,17 @@ source-repository head
   location:            https://github.com/thecentury/haskell-blockudoku.git
 
 common common-options
-  build-depends:       base ^>= 4.16.0.0
+  build-depends:       base ^>= 4.16.0.0,
+                       brick,
+                       containers,
+                       extra,
+                       linear,
+                       lens,
+                       random,
+                       transformers,
+                       vty,
+                       mtl,
+                       stm
   
   ghc-options:         -Wall
                        -Wcompat
@@ -42,7 +52,7 @@ common common-options
 library
   import:              common-options
   hs-source-dirs:      src
-  exposed-modules:     HaskellBlockudoku
+  exposed-modules:     UI
 
 executable haskell-blockudoku
   import:              common-options

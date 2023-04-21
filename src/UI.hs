@@ -18,6 +18,7 @@ import qualified Brick.Widgets.Center as C
 import Control.Lens ((^.), (&), (.~))
 import qualified Graphics.Vty as V
 import Data.Array (elems)
+import Data.Functor (void)
 
 type Name = ()
 

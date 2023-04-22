@@ -3,12 +3,25 @@
 module Blockudoku where
 
 import Control.Lens hiding ((<|), (|>), (:>), (:<))
-import Data.Array
-import System.Random.Stateful
+import Data.Array ( (!), (//), array, bounds, Array )
+import System.Random.Stateful ( globalStdGen, UniformRange(uniformRM) )
 import Control.Monad (replicateM)
 
 data Cell = Free | Filled
   deriving stock (Show, Eq)
+  
+data CanBePlaced = CanBePlaced | CanNotBePlaced
+  deriving stock (Show, Eq)
+
+data Selectable a =
+  Selected a |
+  NotSelected a
+  deriving stock (Show, Eq)
+
+select :: Maybe (Selectable a) -> Maybe (Selectable a)
+select (Just (Selected a)) = Just $ Selected a
+select (Just (NotSelected a)) = Just $ Selected a
+select Nothing = Nothing
 
 type Coord = (Int, Int)
 
@@ -17,7 +30,7 @@ type Figure = Array Coord Cell
 data Game = Game
   { _score :: Int,
     _board :: Figure,
-    _figures :: Array Int (Maybe Figure) }
+    _figures :: Array Int (Maybe (Selectable Figure)) }
   deriving stock (Show)
 
 makeLenses ''Game
@@ -146,12 +159,13 @@ initGame = do
           ((1, 1), Filled)
         ]
   randomFigures <- replicateM figuresToPlaceCount randomFigure
-  let figuresWithIndex = zip [0 .. figuresToPlaceCount - 1] $ map Just randomFigures
+  let figuresWithIndex = zip [0 .. figuresToPlaceCount - 1] $ map (Just . NotSelected) randomFigures
   let _figures = array (0, figuresToPlaceCount - 1) figuresWithIndex
+  let selectedFirstFigure = _figures // [(0, select $ _figures ! 0)]
   let game = Game
         { _score = 0,
           _board = _board,
-          _figures = _figures }
+          _figures = selectedFirstFigure }
   return game
 
 rowCells :: Int -> Figure -> [Cell]

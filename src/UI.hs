@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-unused-imports #-}
 module UI (main) where
 
 import Blockudoku
@@ -11,7 +12,8 @@ import Brick
   , hLimit, vBox, hBox, padRight, padLeft, padTop, padAll, Padding(..)
   , withBorderStyle, str
   , attrMap, withAttr, emptyWidget, AttrName, on, fg
-  , (<+>), (<=>), attrName, joinBorders, padLeftRight, vLimit)
+  , (<+>), (<=>), attrName, joinBorders, padLeftRight, vLimit, updateAttrMap)
+import qualified Brick.AttrMap as A
 import qualified Brick.Widgets.Border as B
 import qualified Brick.Widgets.Border.Style as BS
 import qualified Brick.Widgets.Center as C
@@ -62,9 +64,22 @@ drawFigure :: Figure -> Widget Name
 drawFigure figure = vBox cellRows where
   cellRows = map (hBox . map drawCell) $ rows figure
 
-drawFigureToPlace :: Maybe Figure -> Widget Name
+selectedFigureBorderMappings :: [(A.AttrName, V.Attr)]
+selectedFigureBorderMappings =
+    [ (B.borderAttr, fg V.yellow) ]
+
+notSelectedFigureBorderMappings :: [(A.AttrName, V.Attr)]
+notSelectedFigureBorderMappings =
+    [ (B.borderAttr, fg V.white) ]
+
+drawSomeFigureToPlace :: [(A.AttrName, V.Attr)] -> Figure -> Widget Name
+drawSomeFigureToPlace mapping figure =
+ padLeftRight 2 $ updateAttrMap (A.applyAttrMappings mapping) $ withBorderStyle BS.unicodeRounded $ B.border $ hLimit 10 $ vLimit 6 $ C.center $ drawFigure figure
+
+drawFigureToPlace :: Maybe (Selectable Figure) -> Widget Name
 drawFigureToPlace Nothing = padAll 3 emptyWidget
-drawFigureToPlace (Just figure) = padLeftRight 2 $ drawFigure figure
+drawFigureToPlace (Just (Selected figure)) = drawSomeFigureToPlace selectedFigureBorderMappings figure
+drawFigureToPlace (Just (NotSelected figure)) = drawSomeFigureToPlace notSelectedFigureBorderMappings figure
 
 drawCell :: Cell -> Widget Name
 drawCell Free = withAttr emptyCellAttr $ str "· "

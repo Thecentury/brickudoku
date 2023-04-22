@@ -3,9 +3,10 @@
 module Blockudoku where
 
 import Control.Lens hiding ((<|), (|>), (:>), (:<))
-import Data.Array ( (!), (//), array, bounds, Array )
+import Data.Array ( (!), (//), array, bounds, Array, elems, assocs )
 import System.Random.Stateful ( globalStdGen, UniformRange(uniformRM) )
 import Control.Monad (replicateM)
+import Data.List (findIndex)
 
 data Cell = Free | Filled
   deriving stock (Show, Eq)
@@ -23,14 +24,26 @@ select (Just (Selected a)) = Just $ Selected a
 select (Just (NotSelected a)) = Just $ Selected a
 select Nothing = Nothing
 
+deselect :: Maybe (Selectable a) -> Maybe (Selectable a)
+deselect (Just (Selected a)) = Just $ NotSelected a
+deselect (Just (NotSelected a)) = Just $ NotSelected a
+deselect Nothing = Nothing
+
 type Coord = (Int, Int)
 
 type Figure = Array Coord Cell
 
+data State =
+  SelectingFigure |
+  PlacingFigure Coord |
+  GameOver
+  deriving stock (Show, Eq)
+
 data Game = Game
   { _score :: Int,
     _board :: Figure,
-    _figures :: Array Int (Maybe (Selectable Figure)) }
+    _figures :: Array Int (Maybe (Selectable Figure)),
+    _state :: State }
   deriving stock (Show)
 
 makeLenses ''Game
@@ -39,6 +52,8 @@ boardHeight, boardWidth, figuresToPlaceCount :: Int
 boardHeight = 9
 boardWidth = 9
 figuresToPlaceCount = 3
+
+--- Figures generation ---
 
 possibleFiguresData :: [[[Int]]]
 possibleFiguresData =
@@ -148,6 +163,8 @@ randomFigure = do
   let figure = possibleFigures !! figureIndex
   return $ iterate rotateFigureClockwise figure !! rotations
 
+---
+
 initGame :: IO Game
 initGame = do
   let _board =
@@ -165,18 +182,56 @@ initGame = do
   let game = Game
         { _score = 0,
           _board = _board,
-          _figures = selectedFirstFigure }
+          _figures = selectedFirstFigure,
+          _state = SelectingFigure }
   return game
 
 rowCells :: Int -> Figure -> [Cell]
 rowCells rowIndex f =
   [f ! (rowIndex, c) | c <- [0 .. figureWidth - 1]]
     where
-      upperBound = snd $ bounds f
+      upperBound  = snd $ bounds f
       figureWidth = snd upperBound + 1
 
-rows :: Figure -> [[Cell]]
-rows f = map (`rowCells` f) rowIndices where
+figureRows :: Figure -> [[Cell]]
+figureRows f = map (`rowCells` f) rowIndices where
   upperBound = snd $ bounds f
   figureHeight = fst upperBound + 1
   rowIndices = [0 .. figureHeight - 1]
+
+--- Event handling ---
+
+selectedFigureIndex :: Game -> Maybe Int
+selectedFigureIndex game =
+  game ^. figures & elems & findIndex isSelected
+    where
+      isSelected (Just (Selected _)) = True
+      isSelected _ = False
+
+nextSelectedFigureIndex :: Int -> Maybe Int
+nextSelectedFigureIndex currentFigureIndex =
+  if currentFigureIndex == figuresToPlaceCount - 1
+    then Nothing
+    else Just $ currentFigureIndex + 1
+
+previousSelectedFigureIndex :: Int -> Maybe Int
+previousSelectedFigureIndex currentFigureIndex =
+  if currentFigureIndex == 0
+    then Nothing
+    else Just $ currentFigureIndex - 1
+
+--selectNextFigure :: Game -> Game
+--selectNextFigure game =
+--  case _state game of
+--    SelectingFigure ->
+--      maybe game (\nextIndex -> game & figures %~ setSelected nextIndex) (selectedFigureIndex game >>= nextSelectedFigureIndex) where
+--        setSelected indexToSelect a = a & assocs & map (\(i, x) -> if i == indexToSelect then (i, select x) else (i, deselect x)) & array (bounds a)
+--    _ -> game
+
+selectNextFigure :: (Int -> Maybe Int) -> Game -> Game
+selectNextFigure calculateNextIndex game =
+  case _state game of
+    SelectingFigure ->
+      maybe game (\nextIndex -> game & figures %~ setSelected nextIndex) (selectedFigureIndex game >>= calculateNextIndex) where
+        setSelected indexToSelect a = a & assocs & map (\(i, x) -> if i == indexToSelect then (i, select x) else (i, deselect x)) & array (bounds a)
+    _ -> game

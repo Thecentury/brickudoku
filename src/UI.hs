@@ -34,6 +34,8 @@ app = App { appDraw = drawUI
 
 handleEvent :: BrickEvent Name () -> EventM Name Game ()
 handleEvent (VtyEvent (V.EvKey V.KEsc [])) = halt
+handleEvent (VtyEvent (V.EvKey V.KRight [])) = modify $ selectNextFigure nextSelectedFigureIndex
+handleEvent (VtyEvent (V.EvKey V.KLeft [])) = modify $ selectNextFigure previousSelectedFigureIndex
 handleEvent _ = return ()
 
 drawUI :: Game -> [Widget Name]
@@ -62,7 +64,7 @@ drawGrid game =
 
 drawFigure :: Figure -> Widget Name
 drawFigure figure = vBox cellRows where
-  cellRows = map (hBox . map drawCell) $ rows figure
+  cellRows = map (hBox . map drawCell) $ figureRows figure
 
 selectedFigureBorderMappings :: [(A.AttrName, V.Attr)]
 selectedFigureBorderMappings =
@@ -72,14 +74,21 @@ notSelectedFigureBorderMappings :: [(A.AttrName, V.Attr)]
 notSelectedFigureBorderMappings =
     [ (B.borderAttr, fg V.white) ]
 
-drawSomeFigureToPlace :: [(A.AttrName, V.Attr)] -> Figure -> Widget Name
-drawSomeFigureToPlace mapping figure =
- padLeftRight 2 $ updateAttrMap (A.applyAttrMappings mapping) $ withBorderStyle BS.unicodeRounded $ B.border $ hLimit 10 $ vLimit 6 $ C.center $ drawFigure figure
+drawSomeFigureToPlace :: [(A.AttrName, V.Attr)] -> BS.BorderStyle -> Figure -> Widget Name
+drawSomeFigureToPlace mapping borderStyle figure =
+ padLeftRight 2
+ $ updateAttrMap (A.applyAttrMappings mapping)
+ $ withBorderStyle borderStyle
+ $ B.border
+ $ hLimit 10
+ $ vLimit 6
+ $ C.center
+ $ drawFigure figure
 
 drawFigureToPlace :: Maybe (Selectable Figure) -> Widget Name
 drawFigureToPlace Nothing = padAll 3 emptyWidget
-drawFigureToPlace (Just (Selected figure)) = drawSomeFigureToPlace selectedFigureBorderMappings figure
-drawFigureToPlace (Just (NotSelected figure)) = drawSomeFigureToPlace notSelectedFigureBorderMappings figure
+drawFigureToPlace (Just (Selected figure)) = drawSomeFigureToPlace selectedFigureBorderMappings BS.unicodeBold figure
+drawFigureToPlace (Just (NotSelected figure)) = drawSomeFigureToPlace notSelectedFigureBorderMappings BS.unicodeRounded figure
 
 drawCell :: Cell -> Widget Name
 drawCell Free = withAttr emptyCellAttr $ str "· "

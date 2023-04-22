@@ -1,5 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 module Blockudoku where
 
 import Control.Lens hiding ((<|), (|>), (:>), (:<))
@@ -7,10 +8,21 @@ import Data.Array ( (!), (//), array, bounds, Array, elems, assocs )
 import System.Random.Stateful ( globalStdGen, UniformRange(uniformRM) )
 import Control.Monad (replicateM)
 import Data.List (findIndex)
+import Data.Maybe (mapMaybe)
 
-data Cell = Free | Filled
+data Cell =
+  Free | Filled
   deriving stock (Show, Eq)
-  
+
+data PlacingCell =
+  PlacingFree |
+  PlacingFilled |
+  PlacingCanPlaceFullFigure |
+  PlacingCanPlaceButNotFullFigure |
+  PlacingCannotPlace
+  deriving stock (Show, Eq)
+
+-- todo is it needed?
 data CanBePlaced = CanBePlaced | CanNotBePlaced
   deriving stock (Show, Eq)
 
@@ -29,13 +41,106 @@ deselect (Just (Selected a)) = Just $ NotSelected a
 deselect (Just (NotSelected a)) = Just $ NotSelected a
 deselect Nothing = Nothing
 
-type Coord = (Int, Int)
+--- Coordinates
 
-type Figure = Array Coord Cell
+data Coord = Coord { _x :: Int, _y :: Int }
+  deriving stock (Show, Eq)
+
+coordToCellCoord :: Coord -> CellCoord
+coordToCellCoord (Coord x y) = (y, x)
+
+data Vector = Vector { _dx :: Int, _dy :: Int }
+  deriving stock (Show, Eq)
+
+data Direction = DirUp | DirDown | DirLeft | DirRight
+  deriving stock (Show, Eq)
+
+directionToVector :: Direction -> Vector
+directionToVector DirUp = Vector { _dx = 0, _dy = -1 }
+directionToVector DirDown = Vector { _dx = 0, _dy = 1 }
+directionToVector DirLeft = Vector { _dx = -1, _dy = 0 }
+directionToVector DirRight = Vector { _dx = 1, _dy = 0 }
+
+addVector :: Coord -> Vector -> Coord
+addVector (Coord x y) (Vector dx dy) = Coord (x + dx) (y + dy)
+
+---
+
+type CellCoord = (Int, Int)
+
+row :: CellCoord -> Int
+row = fst
+
+col :: CellCoord -> Int
+col = snd
+
+type Figure = Array CellCoord Cell
+
+type PlacingCellsFigure = Array CellCoord PlacingCell
+
+tryMoveFigure :: Figure -> Figure -> Coord -> Vector -> Maybe Coord
+tryMoveFigure board figure coord vector =
+  let
+    newCoord = addVector coord vector
+    figureSize = snd $ bounds figure
+    boardBounds = bounds board
+    boardTopLeft = fst boardBounds
+    boardBottomRight = snd boardBounds
+    topLeftWithinBoard =
+      newCoord._x >= col boardTopLeft &&
+      newCoord._y >= row boardTopLeft
+    bottomRightWithinBoard =
+      newCoord._x + col figureSize <= col boardBottomRight &&
+      newCoord._y + row figureSize <= row boardBottomRight
+  in
+    if topLeftWithinBoard && bottomRightWithinBoard then
+      Just newCoord
+    else
+      Nothing
+
+boardCellToPlacingCell :: Cell -> PlacingCell
+boardCellToPlacingCell Free = PlacingFree
+boardCellToPlacingCell Filled = PlacingFilled
+
+boardToPlacingCells :: Figure -> Array CellCoord PlacingCell
+boardToPlacingCells board =
+  board
+  & assocs
+  & map (\(coord, cell) -> ((coord, boardCellToPlacingCell cell)))
+  & array (bounds board)
+
+addPlacingFigure :: Figure -> Coord -> Figure -> PlacingCellsFigure
+addPlacingFigure figure figureCoord board =
+  placingBoard // figureCells
+  where
+    placingBoard = boardToPlacingCells board
+
+    figureCells =
+      figure
+      & assocs
+      & map (\(coord, cell) -> (newCoord coord, figureCell (newCoord coord) cell))
+
+    newCoord :: CellCoord -> CellCoord
+    newCoord (r, c) = (r + figureCoord._y, c + figureCoord._x)
+
+    canPlaceFullFigure =
+      figure
+      & assocs
+      & mapMaybe (\(coord, cell) -> if cell == Filled then Just $ newCoord coord else Nothing)
+      & all (\coord -> board ! coord == Free)
+
+    figureCell :: CellCoord -> Cell -> PlacingCell
+    figureCell boardCoord figCell =
+      case (board ! boardCoord, figCell, canPlaceFullFigure) of
+        (Filled, Filled, _) -> PlacingCannotPlace
+        (Filled, Free, _) -> PlacingFilled
+        (Free, Filled, True) -> PlacingCanPlaceFullFigure
+        (Free, Filled, False) -> PlacingCanPlaceButNotFullFigure
+        (Free, Free, _) -> PlacingFree
 
 data State =
   SelectingFigure |
-  PlacingFigure Coord |
+  PlacingFigure Figure Coord |
   GameOver
   deriving stock (Show, Eq)
 
@@ -137,8 +242,10 @@ mkFigure idx =
   where
     figureHeight = length idx
     figureWidth = length (head idx)
-    numberAt :: Coord -> Int
+
+    numberAt :: CellCoord -> Int
     numberAt (r, c) = (idx !! r) !! c
+
     intToCell :: Int -> Cell
     intToCell 0 = Free
     intToCell _ = Filled
@@ -168,13 +275,8 @@ randomFigure = do
 initGame :: IO Game
 initGame = do
   let _board =
-        array ((0, 0), (boardHeight - 1, boardWidth - 1)) [((i, j), Free) | i <- [0 .. boardHeight - 1], j <- [0 .. boardWidth - 1]]
-        // [
-          ((0, 0), Filled),
-          ((0, 1), Filled),
-          ((1, 0), Filled),
-          ((1, 1), Filled)
-        ]
+        array ((0, 0), (boardHeight - 1, boardWidth - 1))
+          [((i, j), Free) | i <- [0 .. boardHeight - 1], j <- [0 .. boardWidth - 1]]
   randomFigures <- replicateM figuresToPlaceCount randomFigure
   let figuresWithIndex = zip [0 .. figuresToPlaceCount - 1] $ map (Just . NotSelected) randomFigures
   let _figures = array (0, figuresToPlaceCount - 1) figuresWithIndex
@@ -186,14 +288,14 @@ initGame = do
           _state = SelectingFigure }
   return game
 
-rowCells :: Int -> Figure -> [Cell]
+rowCells :: Int -> Array CellCoord a -> [a]
 rowCells rowIndex f =
   [f ! (rowIndex, c) | c <- [0 .. figureWidth - 1]]
     where
       upperBound  = snd $ bounds f
       figureWidth = snd upperBound + 1
 
-figureRows :: Figure -> [[Cell]]
+figureRows :: Array CellCoord a -> [[a]]
 figureRows f = map (`rowCells` f) rowIndices where
   upperBound = snd $ bounds f
   figureHeight = fst upperBound + 1
@@ -207,6 +309,12 @@ selectedFigureIndex game =
     where
       isSelected (Just (Selected _)) = True
       isSelected _ = False
+
+selectedFigure :: Game -> Maybe Figure
+selectedFigure game =
+  case selectedFigureIndex game >>= \i -> (game ^. figures) ! i of
+    Just (Selected f) -> Just f
+    _ -> Nothing
 
 nextSelectedFigureIndex :: Int -> Maybe Int
 nextSelectedFigureIndex currentFigureIndex =
@@ -237,3 +345,19 @@ selectNextFigure calculateNextIndex game =
       & assocs
       & map (\(i, x) -> if i == indexToSelect then (i, select x) else (i, deselect x))
       & array (bounds a)
+
+startPlacingFigure :: Game -> Game
+startPlacingFigure game =
+  maybe game (\f -> game & state .~ PlacingFigure f (Coord { _x = 0, _y = 0 })) (selectedFigure game)
+
+---
+
+movePlacingFigure :: Game -> Direction -> Game
+movePlacingFigure game direction =
+  case game ^. state of
+    PlacingFigure figure coord ->
+      let
+        newCoord = maybe coord id $ tryMoveFigure game._board figure coord (directionToVector direction)
+      in
+        state .~ (PlacingFigure figure newCoord) $ game
+    _ -> game

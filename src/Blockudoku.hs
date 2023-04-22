@@ -228,10 +228,12 @@ previousSelectedFigureIndex currentFigureIndex =
 --        setSelected indexToSelect a = a & assocs & map (\(i, x) -> if i == indexToSelect then (i, select x) else (i, deselect x)) & array (bounds a)
 --    _ -> game
 
+-- todo not all figures may be selectable
 selectNextFigure :: (Int -> Maybe Int) -> Game -> Game
 selectNextFigure calculateNextIndex game =
-  case _state game of
-    SelectingFigure ->
-      maybe game (\nextIndex -> game & figures %~ setSelected nextIndex) (selectedFigureIndex game >>= calculateNextIndex) where
-        setSelected indexToSelect a = a & assocs & map (\(i, x) -> if i == indexToSelect then (i, select x) else (i, deselect x)) & array (bounds a)
-    _ -> game
+  maybe game (\nextIndex -> game & figures %~ setSelected nextIndex) (selectedFigureIndex game >>= calculateNextIndex) where
+    setSelected indexToSelect a =
+      a
+      & assocs
+      & map (\(i, x) -> if i == indexToSelect then (i, select x) else (i, deselect x))
+      & array (bounds a)

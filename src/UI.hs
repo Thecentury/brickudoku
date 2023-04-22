@@ -34,8 +34,16 @@ app = App { appDraw = drawUI
 
 handleEvent :: BrickEvent Name () -> EventM Name Game ()
 handleEvent (VtyEvent (V.EvKey V.KEsc [])) = halt
-handleEvent (VtyEvent (V.EvKey V.KRight [])) = modify $ selectNextFigure nextSelectedFigureIndex
-handleEvent (VtyEvent (V.EvKey V.KLeft [])) = modify $ selectNextFigure previousSelectedFigureIndex
+handleEvent (VtyEvent (V.EvKey V.KRight [])) =
+  modify $ \game ->
+    case game ^. Blockudoku.state of
+      SelectingFigure -> selectNextFigure nextSelectedFigureIndex game
+      _ -> game
+handleEvent (VtyEvent (V.EvKey V.KLeft [])) =
+  modify $ \game ->
+    case game ^. Blockudoku.state of
+      SelectingFigure -> selectNextFigure previousSelectedFigureIndex game
+      _ -> game
 handleEvent _ = return ()
 
 drawUI :: Game -> [Widget Name]

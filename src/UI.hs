@@ -61,6 +61,11 @@ handleEvent (VtyEvent (V.EvKey V.KEnter [])) =
     case game ^. Blockudoku.state of
       SelectingFigure -> startPlacingFigure game
       _ -> game
+handleEvent (VtyEvent (V.EvKey V.KEsc [])) =
+  modify $ \game ->
+    case game ^. Blockudoku.state of
+      PlacingFigure _ _ -> cancelPlacingFigure game
+      _ -> game
 handleEvent _ = return ()
 
 drawUI :: Game -> [Widget Name]

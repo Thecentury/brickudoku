@@ -349,6 +349,12 @@ selectNextFigure calculateNextIndex game =
 startPlacingFigure :: Game -> Game
 startPlacingFigure game =
   maybe game (\f -> game & state .~ PlacingFigure f (Coord { _x = 0, _y = 0 })) (selectedFigure game)
+  
+cancelPlacingFigure :: Game -> Game
+cancelPlacingFigure game =
+  case game ^. state of
+    PlacingFigure _ _ -> game & state .~ SelectingFigure
+    _ -> game
 
 ---
 

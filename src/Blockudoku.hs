@@ -8,7 +8,7 @@ import Data.Array ( (!), (//), array, bounds, Array, elems, assocs )
 import System.Random.Stateful ( globalStdGen, UniformRange(uniformRM) )
 import Control.Monad (replicateM)
 import Data.List (findIndex)
-import Data.Maybe (mapMaybe)
+import Data.Maybe (mapMaybe, fromMaybe)
 
 data Cell =
   Free | Filled
@@ -106,7 +106,7 @@ boardToPlacingCells :: Figure -> Array CellCoord PlacingCell
 boardToPlacingCells board =
   board
   & assocs
-  & map (\(coord, cell) -> ((coord, boardCellToPlacingCell cell)))
+  & map (\(coord, cell) -> (coord, boardCellToPlacingCell cell))
   & array (bounds board)
 
 addPlacingFigure :: Figure -> Coord -> Figure -> PlacingCellsFigure
@@ -328,14 +328,6 @@ previousSelectedFigureIndex currentFigureIndex =
     then Nothing
     else Just $ currentFigureIndex - 1
 
---selectNextFigure :: Game -> Game
---selectNextFigure game =
---  case _state game of
---    SelectingFigure ->
---      maybe game (\nextIndex -> game & figures %~ setSelected nextIndex) (selectedFigureIndex game >>= nextSelectedFigureIndex) where
---        setSelected indexToSelect a = a & assocs & map (\(i, x) -> if i == indexToSelect then (i, select x) else (i, deselect x)) & array (bounds a)
---    _ -> game
-
 -- todo not all figures may be selectable
 selectNextFigure :: (Int -> Maybe Int) -> Game -> Game
 selectNextFigure calculateNextIndex game =
@@ -349,7 +341,7 @@ selectNextFigure calculateNextIndex game =
 startPlacingFigure :: Game -> Game
 startPlacingFigure game =
   maybe game (\f -> game & state .~ PlacingFigure f (Coord { _x = 0, _y = 0 })) (selectedFigure game)
-  
+
 cancelPlacingFigure :: Game -> Game
 cancelPlacingFigure game =
   case game ^. state of
@@ -363,7 +355,7 @@ movePlacingFigure game direction =
   case game ^. state of
     PlacingFigure figure coord ->
       let
-        newCoord = maybe coord id $ tryMoveFigure game._board figure coord (directionToVector direction)
+        newCoord = fromMaybe coord $ tryMoveFigure game._board figure coord (directionToVector direction)
       in
-        state .~ (PlacingFigure figure newCoord) $ game
+        state .~ PlacingFigure figure newCoord $ game
     _ -> game

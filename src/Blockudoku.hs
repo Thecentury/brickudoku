@@ -185,9 +185,8 @@ data Game = Game
 
 makeLenses ''Game
 
-boardHeight, boardWidth, figuresToPlaceCount :: Int
-boardHeight = 9
-boardWidth = 9
+boardSize, figuresToPlaceCount :: Int
+boardSize = 9
 figuresToPlaceCount = 3
 
 --- Figures generation ---
@@ -316,8 +315,8 @@ randomSelectableFigures = do
 initGame :: IO Game
 initGame = do
   let _board =
-        array ((0, 0), (boardHeight - 1, boardWidth - 1))
-          [((i, j), Free) | i <- [0 .. boardHeight - 1], j <- [0 .. boardWidth - 1]]
+        array ((0, 0), (boardSize - 1, boardSize - 1))
+          [((i, j), Free) | i <- [0 .. boardSize - 1], j <- [0 .. boardSize - 1]]
   selectedFirstFigure <- randomSelectableFigures
   let game = Game
         { _score = 0,
@@ -428,21 +427,30 @@ placeFigure game =
               randomSelectableFigures
             else
               pure $ selectFirstSelectableFigure newFigures
-          pure $ state .~ SelectingFigure $ figures .~ newFigures2 $ board .~ newBoard $ game
+          pure $ state .~ SelectingFigure $ figures .~ newFigures2 $ board .~ (removeFilledRanges newBoard) $ game
         Nothing -> pure game
     _ -> pure game
 
---placeFigure :: Game -> Game
---placeFigure game =
---  case game ^. state of
---    PlacingFigure figure coord ->
---      let
---        newBoard = placeFigureOnBoard game._board figure coord
---        newScore = game._score + figureScore figure
---        newFigures = game._figures & assocs & map (\(i, x) -> if i == fromJust (selectedFigureIndex game) then (i, deselect x) else (i, x)) & array (bounds game._figures)
---        newGame = game & board .~ newBoard & score .~ newScore & figures .~ newFigures
---      in
---        if isNothing (selectedFigureIndex newGame)
---          then newGame & state .~ GameOver
---          else newGame & state .~ SelectingFigure
---    _ -> game
+freeAllCells :: Figure -> [CellCoord] -> Figure
+freeAllCells fig coords =
+  fig // fmap (\coord -> (coord, Free)) coords
+
+allCellsAreFilled :: Figure -> [CellCoord] -> Bool
+allCellsAreFilled fig coords =
+  coords & fmap (\coord -> fig ! coord) & all (== Filled)
+
+full9Ranges :: [[CellCoord]]
+full9Ranges = allHorizontal ++ allVertical ++ squares where
+  horizontal r  = fmap (\c -> (r, c)) all9
+  vertical   c  = fmap (\r -> (r, c)) all9
+  allHorizontal = fmap horizontal all9
+  allVertical   = fmap vertical all9
+  all9          = [0 .. boardSize - 1]
+  square startRow startColumn = [(startRow + r, startColumn + c) | r <- [0..2], c <- [0..2]]
+  squares       = [square (r * 3) (c * 3) | r <- [0..2], c <- [0..2]]
+
+removeFilledRanges :: Figure -> Figure
+removeFilledRanges fig =
+  foldl freeAllCells fig fullRanges
+  where
+    fullRanges = filter (allCellsAreFilled fig) full9Ranges

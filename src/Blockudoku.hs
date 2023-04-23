@@ -284,6 +284,9 @@ mkFigure idx =
 possibleFigures :: [Figure]
 possibleFigures = map mkFigure possibleFiguresData
 
+emptyFigure :: Figure
+emptyFigure = mkFigure [[0]]
+
 rotateFigureClockwise :: Figure -> Figure
 rotateFigureClockwise f =
   array ((0, 0), (newHeight - 1, newWidth - 1)) [((c, figureHeight - 1 - r), f ! (r, c)) | r <- [0 .. figureHeight - 1], c <- [0 .. figureWidth - 1]]

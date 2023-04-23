@@ -123,8 +123,8 @@ notSelectedFigureBorderMappings :: [(A.AttrName, V.Attr)]
 notSelectedFigureBorderMappings =
     [ (B.borderAttr, fg V.white) ]
 
-drawSomeFigureToPlace :: [(A.AttrName, V.Attr)] -> BS.BorderStyle -> Figure -> Widget Name
-drawSomeFigureToPlace mapping borderStyle figure =
+drawSomeFigureToPlace :: [(A.AttrName, V.Attr)] -> BS.BorderStyle -> (Cell -> Widget Name) -> Figure -> Widget Name
+drawSomeFigureToPlace mapping borderStyle drawOneCell figure =
  padLeftRight 2
  $ updateAttrMap (A.applyAttrMappings mapping)
  $ withBorderStyle borderStyle
@@ -132,13 +132,13 @@ drawSomeFigureToPlace mapping borderStyle figure =
  $ hLimit 10
  $ vLimit 6
  $ C.center
- $ drawFigure drawCell figure
+ $ drawFigure drawOneCell figure
 
 drawFigureToPlace :: Bool -> Maybe (Selectable Figure) -> Widget Name
-drawFigureToPlace _ Nothing = withBorderStyle BS.unicodeRounded $ B.border $ hLimit 10 $ vLimit 6 $ C.center $ padAll 6 emptyWidget
-drawFigureToPlace True (Just (Selected figure)) = drawSomeFigureToPlace selectedFigureBorderMappings BS.unicodeBold figure
-drawFigureToPlace False (Just (Selected figure)) = drawSomeFigureToPlace notSelectedFigureBorderMappings BS.unicodeRounded figure
-drawFigureToPlace _ (Just (NotSelected figure)) = drawSomeFigureToPlace notSelectedFigureBorderMappings BS.unicodeRounded figure
+drawFigureToPlace _ Nothing = drawSomeFigureToPlace notSelectedFigureBorderMappings BS.unicodeRounded (\_ -> withAttr emptyCellAttr $ str "  ") emptyFigure
+drawFigureToPlace True (Just (Selected figure)) = drawSomeFigureToPlace selectedFigureBorderMappings BS.unicodeBold drawCell figure
+drawFigureToPlace False (Just (Selected figure)) = drawSomeFigureToPlace notSelectedFigureBorderMappings BS.unicodeRounded drawCell figure
+drawFigureToPlace _ (Just (NotSelected figure)) = drawSomeFigureToPlace notSelectedFigureBorderMappings BS.unicodeRounded drawCell figure
 
 drawCell :: Cell -> Widget Name
 drawCell Free = withAttr emptyCellAttr $ str "· "

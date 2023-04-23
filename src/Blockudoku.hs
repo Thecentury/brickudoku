@@ -451,6 +451,5 @@ full9Ranges = allHorizontal ++ allVertical ++ squares where
 
 removeFilledRanges :: Figure -> Figure
 removeFilledRanges fig =
-  foldl freeAllCells fig fullRanges
-  where
+  foldl freeAllCells fig fullRanges where
     fullRanges = filter (allCellsAreFilled fig) full9Ranges

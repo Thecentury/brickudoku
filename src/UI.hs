@@ -56,11 +56,14 @@ handleEvent (VtyEvent (V.EvKey V.KDown [])) =
     case game ^. Blockudoku.state of
       PlacingFigure _ _ -> movePlacingFigure game DirDown
       _ -> game
-handleEvent (VtyEvent (V.EvKey V.KEnter [])) =
-  modify $ \game ->
+handleEvent (VtyEvent (V.EvKey V.KEnter [])) = do
+  game <- get
+  game2 <-
     case game ^. Blockudoku.state of
-      SelectingFigure -> startPlacingFigure game
-      _ -> game
+      SelectingFigure -> pure $ startPlacingFigure game
+      PlacingFigure _ _ -> liftIO $ placeFigure game
+      _ -> pure game
+  put game2
 handleEvent (VtyEvent (V.EvKey V.KEsc [])) =
   modify $ \game ->
     case game ^. Blockudoku.state of
@@ -74,7 +77,12 @@ drawUI game =
     C.center (centralColumn <+> padLeft (Pad 2) (drawScore game))
   ] where
     centralColumn = C.hCenter (drawGrid game) <=> padTop (Pad 1) figuresToPlace
-    figuresToPlace = C.hCenter $ withBorderStyle BS.unicodeRounded $ B.border $ hBox $ map (vLimit 6 . C.vCenter . drawFigureToPlace (game ^. Blockudoku.state == SelectingFigure)) $ elems $ game ^. figures
+    figuresToPlace =
+      C.hCenter
+      $ withBorderStyle BS.unicodeRounded
+      $ B.border
+      $ hBox
+      $ map (vLimit 6 . C.vCenter . drawFigureToPlace (game ^. Blockudoku.state == SelectingFigure)) $ elems $ game ^. figures
 
 drawScore :: Game -> Widget Name
 drawScore game =
@@ -127,7 +135,7 @@ drawSomeFigureToPlace mapping borderStyle figure =
  $ drawFigure drawCell figure
 
 drawFigureToPlace :: Bool -> Maybe (Selectable Figure) -> Widget Name
-drawFigureToPlace _ Nothing = padAll 3 emptyWidget
+drawFigureToPlace _ Nothing = withBorderStyle BS.unicodeRounded $ B.border $ hLimit 10 $ vLimit 6 $ C.center $ padAll 6 emptyWidget
 drawFigureToPlace True (Just (Selected figure)) = drawSomeFigureToPlace selectedFigureBorderMappings BS.unicodeBold figure
 drawFigureToPlace False (Just (Selected figure)) = drawSomeFigureToPlace notSelectedFigureBorderMappings BS.unicodeRounded figure
 drawFigureToPlace _ (Just (NotSelected figure)) = drawSomeFigureToPlace notSelectedFigureBorderMappings BS.unicodeRounded figure

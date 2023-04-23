@@ -3,12 +3,16 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 module Blockudoku where
 
-import Control.Lens hiding ((<|), (|>), (:>), (:<))
-import Data.Array ( (!), (//), array, bounds, Array, elems, assocs )
+import Control.Lens hiding ((<|), (|>), (:>), (:<), index)
+import Data.Array ( (!), (//), array, bounds, Array, elems, assocs, listArray )
 import System.Random.Stateful ( globalStdGen, UniformRange(uniformRM) )
 import Control.Monad (replicateM)
 import Data.List (findIndex)
 import Data.Maybe (mapMaybe, fromMaybe)
+
+import MyPrelude
+
+--
 
 data Cell =
   Free | Filled
@@ -40,6 +44,14 @@ deselect :: Maybe (Selectable a) -> Maybe (Selectable a)
 deselect (Just (Selected a)) = Just $ NotSelected a
 deselect (Just (NotSelected a)) = Just $ NotSelected a
 deselect Nothing = Nothing
+
+markSelectedAsPlaced :: Maybe (Selectable a) -> Maybe (Selectable a)
+markSelectedAsPlaced (Just (Selected _)) = Nothing
+markSelectedAsPlaced (Just (NotSelected a)) = Just $ NotSelected a
+markSelectedAsPlaced Nothing = Nothing
+
+allPlaced :: (Foldable m, Eq a) => m (Maybe a) -> Bool
+allPlaced a = foldl (\soFar item -> soFar && item == Nothing) True a
 
 --- Coordinates
 
@@ -108,6 +120,26 @@ boardToPlacingCells board =
   & assocs
   & map (\(coord, cell) -> (coord, boardCellToPlacingCell cell))
   & array (bounds board)
+
+tryPlaceFigure :: Figure -> Coord -> Figure -> Maybe Figure
+tryPlaceFigure figure figureCoord board =
+  let
+    figureCells =
+      figure
+      & assocs
+      & mapMaybe (\(coord, cell) -> if cell == Filled then Just $ newCoord coord else Nothing)
+  in
+    tryPlace board figureCells
+  where
+    newCoord :: CellCoord -> CellCoord
+    newCoord (r, c) = (r + figureCoord._y, c + figureCoord._x)
+
+    tryPlace :: Figure -> [CellCoord] -> Maybe Figure
+    tryPlace b [] = Just b
+    tryPlace b (coord : coords) =
+      case b ! coord of
+        Free -> tryPlace (b // [(coord, Filled)]) coords
+        Filled -> Nothing
 
 addPlacingFigure :: Figure -> Coord -> Figure -> PlacingCellsFigure
 addPlacingFigure figure figureCoord board =
@@ -219,7 +251,6 @@ possibleFiguresData =
     [
       [1, 0, 0],
       [1, 0, 0],
-      [1, 0, 0],
       [1, 1, 1]
     ],
     -- bracket
@@ -263,8 +294,8 @@ rotateFigureClockwise f =
       newWidth = figureHeight
       newHeight = figureWidth
 
-randomFigure :: IO Figure
-randomFigure = do
+randomRawFigure :: IO Figure
+randomRawFigure = do
   figureIndex <- uniformRM (0, length possibleFigures - 1) globalStdGen
   rotations <- uniformRM (0 :: Int, 3) globalStdGen
   let figure = possibleFigures !! figureIndex
@@ -272,15 +303,19 @@ randomFigure = do
 
 ---
 
+randomSelectableFigures :: IO (Array Int (Maybe (Selectable Figure)))
+randomSelectableFigures = do
+  rawFigures <- replicateM figuresToPlaceCount randomRawFigure
+  let selectableFigures = listArray (0, figuresToPlaceCount - 1) $ map (Just . NotSelected) rawFigures
+  -- Select first figure
+  pure $ mapArrayItem 0 select $ selectableFigures
+
 initGame :: IO Game
 initGame = do
   let _board =
         array ((0, 0), (boardHeight - 1, boardWidth - 1))
           [((i, j), Free) | i <- [0 .. boardHeight - 1], j <- [0 .. boardWidth - 1]]
-  randomFigures <- replicateM figuresToPlaceCount randomFigure
-  let figuresWithIndex = zip [0 .. figuresToPlaceCount - 1] $ map (Just . NotSelected) randomFigures
-  let _figures = array (0, figuresToPlaceCount - 1) figuresWithIndex
-  let selectedFirstFigure = _figures // [(0, select $ _figures ! 0)]
+  selectedFirstFigure <- randomSelectableFigures
   let game = Game
         { _score = 0,
           _board = _board,
@@ -329,6 +364,24 @@ previousSelectedFigureIndex currentFigureIndex =
     else Just $ currentFigureIndex - 1
 
 -- todo not all figures may be selectable
+selectFirstSelectableFigure :: Array Int (Maybe (Selectable a)) -> Array Int (Maybe (Selectable a))
+selectFirstSelectableFigure figs =
+  go 0
+  where
+    next index f =
+      let (_, maxIndex) = bounds figs
+      in if index < maxIndex then
+        f (index + 1)
+      else
+        figs
+
+    go index =
+      case figs ! index of
+        Nothing -> next index go
+        Just (Selected _) -> figs
+        Just (NotSelected a) -> figs // [(index, Just (Selected a))]
+
+-- todo not all figures may be selectable
 selectNextFigure :: (Int -> Maybe Int) -> Game -> Game
 selectNextFigure calculateNextIndex game =
   maybe game (\nextIndex -> game & figures %~ setSelected nextIndex) (selectedFigureIndex game >>= calculateNextIndex) where
@@ -359,3 +412,34 @@ movePlacingFigure game direction =
       in
         state .~ PlacingFigure figure newCoord $ game
     _ -> game
+
+placeFigure :: Game -> IO Game
+placeFigure game =
+  case game ^. state of
+    PlacingFigure figure coord ->
+      case tryPlaceFigure figure coord $ game ^. board of
+        Just newBoard -> do
+          let newFigures = game ^. figures & fmap markSelectedAsPlaced
+          newFigures2 <-
+            if allPlaced newFigures then
+              randomSelectableFigures
+            else
+              pure $ selectFirstSelectableFigure newFigures
+          pure $ state .~ SelectingFigure $ figures .~ newFigures2 $ board .~ newBoard $ game
+        Nothing -> pure game
+    _ -> pure game
+
+--placeFigure :: Game -> Game
+--placeFigure game =
+--  case game ^. state of
+--    PlacingFigure figure coord ->
+--      let
+--        newBoard = placeFigureOnBoard game._board figure coord
+--        newScore = game._score + figureScore figure
+--        newFigures = game._figures & assocs & map (\(i, x) -> if i == fromJust (selectedFigureIndex game) then (i, deselect x) else (i, x)) & array (bounds game._figures)
+--        newGame = game & board .~ newBoard & score .~ newScore & figures .~ newFigures
+--      in
+--        if isNothing (selectedFigureIndex newGame)
+--          then newGame & state .~ GameOver
+--          else newGame & state .~ SelectingFigure
+--    _ -> game

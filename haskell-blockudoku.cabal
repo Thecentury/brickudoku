@@ -25,6 +25,7 @@ source-repository head
 library
   exposed-modules:
       Blockudoku
+      MyPrelude
       UI
   other-modules:
       Paths_haskell_blockudoku

@@ -76,7 +76,7 @@ drawUI game =
   [
     C.center (centralColumn <+> padLeft (Pad 2) (drawScore game))
   ] where
-    centralColumn = C.hCenter (drawGrid game) <=> padTop (Pad 1) figuresToPlace
+    centralColumn = C.hCenter (str $ "Turn: " ++ show (game ^. turnNumber)) <=> C.hCenter (drawGrid game) <=> padTop (Pad 1) figuresToPlace
     figuresToPlace =
       C.hCenter
       $ withBorderStyle BS.unicodeRounded

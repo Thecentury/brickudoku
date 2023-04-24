@@ -180,7 +180,8 @@ data Game = Game
   { _score :: Int,
     _board :: Figure,
     _figures :: Array Int (Maybe (Selectable Figure)),
-    _state :: State }
+    _state :: State,
+    _turnNumber :: Int }
   deriving stock (Show)
 
 makeLenses ''Game
@@ -322,7 +323,8 @@ initGame = do
         { _score = 0,
           _board = _board,
           _figures = selectedFirstFigure,
-          _state = SelectingFigure }
+          _state = SelectingFigure,
+          _turnNumber = 1 }
   return game
 
 rowCells :: Int -> Array CellCoord a -> [a]
@@ -422,12 +424,17 @@ placeFigure game =
       case tryPlaceFigure figure coord $ game ^. board of
         Just newBoard -> do
           let newFigures = game ^. figures & fmap markSelectedAsPlaced
-          newFigures2 <-
+          (newFigures2, turnIncrement) <-
             if allPlaced newFigures then
-              randomSelectableFigures
+              fmap (\f -> (f, 1)) randomSelectableFigures
             else
-              pure $ selectFirstSelectableFigure newFigures
-          pure $ state .~ SelectingFigure $ figures .~ newFigures2 $ board .~ (removeFilledRanges newBoard) $ game
+              pure (selectFirstSelectableFigure newFigures, 0)
+          pure
+            $ state .~ SelectingFigure
+            $ figures .~ newFigures2
+            $ board .~ (removeFilledRanges newBoard)
+            $ turnNumber +~ turnIncrement
+            $ game
         Nothing -> pure game
     _ -> pure game
 

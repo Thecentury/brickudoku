@@ -8,7 +8,8 @@ import Data.Array ( (!), (//), array, bounds, Array, elems, assocs, listArray )
 import System.Random.Stateful ( globalStdGen, UniformRange(uniformRM) )
 import Control.Monad (replicateM)
 import Data.List (findIndex)
-import Data.Maybe (mapMaybe, fromMaybe)
+import qualified Data.List as List
+import Data.Maybe (mapMaybe, fromMaybe, isJust, listToMaybe)
 
 import MyPrelude
 
@@ -355,17 +356,24 @@ selectedFigure game =
     Just (Selected f) -> Just f
     _ -> Nothing
 
-nextSelectedFigureIndex :: Int -> Maybe Int
-nextSelectedFigureIndex currentFigureIndex =
-  if currentFigureIndex == figuresToPlaceCount - 1
-    then Nothing
-    else Just $ currentFigureIndex + 1
+nextFigureIndices :: Int -> [Int]
+nextFigureIndices currentFigureIndex =
+  map (`rem` figuresToPlaceCount) [currentFigureIndex + 1, currentFigureIndex + 2]
 
-previousSelectedFigureIndex :: Int -> Maybe Int
-previousSelectedFigureIndex currentFigureIndex =
-  if currentFigureIndex == 0
-    then Nothing
-    else Just $ currentFigureIndex - 1
+previousFigureIndices :: Int -> [Int]
+previousFigureIndices currentFigureIndex =
+  map (`rem` figuresToPlaceCount) [figuresToPlaceCount + currentFigureIndex - 1, figuresToPlaceCount + currentFigureIndex - 2]
+
+tryFindNextFigureToSelect :: Game -> (Int -> [Int]) -> Maybe Int
+tryFindNextFigureToSelect g nextIndices = do
+  currentIndex <- selectedFigureIndex g
+  let nexts = map (\i -> (i, (g ^. figures) ! i)) $ nextIndices currentIndex
+  fmap fst $ listToMaybe $ filter (\(_, f) -> canBeSelected f) nexts
+  where
+    canBeSelected :: Maybe (Selectable Figure) -> Bool
+    canBeSelected Nothing = False
+    canBeSelected (Just (Selected _)) = False
+    canBeSelected (Just (NotSelected f)) = canBePlacedToBoardAtSomePoint f $ g ^. board
 
 -- todo not all figures may be selectable
 selectFirstSelectableFigure :: Array Int (Maybe (Selectable a)) -> Array Int (Maybe (Selectable a))
@@ -385,15 +393,11 @@ selectFirstSelectableFigure figs =
         Just (Selected _) -> figs
         Just (NotSelected a) -> figs // [(index, Just (Selected a))]
 
--- todo not all figures may be selectable
-selectNextFigure :: (Int -> Maybe Int) -> Game -> Game
-selectNextFigure calculateNextIndex game =
-  maybe game (\nextIndex -> game & figures %~ setSelected nextIndex) (selectedFigureIndex game >>= calculateNextIndex) where
-    setSelected indexToSelect a =
-      a
-      & assocs
-      & map (\(i, x) -> if i == indexToSelect then (i, select x) else (i, deselect x))
-      & array (bounds a)
+selectNextFigure :: (Int -> [Int]) -> Game -> Game
+selectNextFigure nextIndices game =
+  maybe game (\nextIx -> game & figures %~ setSelected nextIx) nextIndex where
+    setSelected indexToSelect = mapiArray (\i x -> if i == indexToSelect then select x else deselect x)
+    nextIndex = tryFindNextFigureToSelect game nextIndices
 
 startPlacingFigure :: Game -> Game
 startPlacingFigure game =
@@ -438,10 +442,12 @@ placeFigure game =
         Nothing -> pure game
     _ -> pure game
 
+-- | Frees cells by specified coordinates
 freeAllCells :: Figure -> [CellCoord] -> Figure
 freeAllCells fig coords =
   fig // fmap (\coord -> (coord, Free)) coords
 
+-- | Determines whether all cells by specified coordinates are filled
 allCellsAreFilled :: Figure -> [CellCoord] -> Bool
 allCellsAreFilled fig coords =
   coords & fmap (\coord -> fig ! coord) & all (== Filled)
@@ -460,3 +466,14 @@ removeFilledRanges :: Figure -> Figure
 removeFilledRanges fig =
   foldl freeAllCells fig fullRanges where
     fullRanges = filter (allCellsAreFilled fig) full9Ranges
+
+possibleFigureStartCoordinates :: Figure -> [Coord]
+possibleFigureStartCoordinates fig =
+  [Coord { _x = x, _y = y } | x <- [0 .. boardSize - figureWidth - 1], y <- [0 .. boardSize - figureHeight - 1]] where
+    figureBounds = snd $ bounds fig
+    (figureWidth, figureHeight) = figureBounds
+
+canBePlacedToBoardAtSomePoint :: Figure -> Figure -> Bool
+canBePlacedToBoardAtSomePoint fig b =
+  List.any (\coord -> tryPlaceFigure fig coord b & isJust) starts where
+    starts = possibleFigureStartCoordinates fig

@@ -37,13 +37,13 @@ handleEvent (VtyEvent (V.EvKey (V.KChar 'q') [])) = halt
 handleEvent (VtyEvent (V.EvKey V.KRight [])) =
   modify $ \game ->
     case game ^. Blockudoku.state of
-      SelectingFigure -> selectNextFigure nextSelectedFigureIndex game
+      SelectingFigure -> selectNextFigure nextFigureIndices game
       PlacingFigure _ _ -> movePlacingFigure game DirRight
       _ -> game
 handleEvent (VtyEvent (V.EvKey V.KLeft [])) =
   modify $ \game ->
     case game ^. Blockudoku.state of
-      SelectingFigure -> selectNextFigure previousSelectedFigureIndex game
+      SelectingFigure -> selectNextFigure previousFigureIndices game
       PlacingFigure _ _ -> movePlacingFigure game DirLeft
       _ -> game
 handleEvent (VtyEvent (V.EvKey V.KUp [])) =
@@ -104,12 +104,17 @@ drawGrid game =
       PlacingFigure figure coord -> addPlacingFigure figure coord $ game ^. board
       _ -> game ^. board & boardToPlacingCells
 
+filledCell :: Widget n
+filledCell = str "  "
+emptyCell :: Widget n
+emptyCell  = str "· "
+
 drawPlacingCell :: PlacingCell -> Widget Name
-drawPlacingCell PlacingFree = withAttr emptyCellAttr $ str "· "
-drawPlacingCell PlacingFilled = withAttr filledCellAttr $ str "  "
-drawPlacingCell PlacingCanPlaceFullFigure = withAttr placingCanPlaceFullFigureAttr $ str "  "
-drawPlacingCell PlacingCanPlaceButNotFullFigure = withAttr placingCanPlaceButNotFullFigure $ str "  "
-drawPlacingCell PlacingCannotPlace = withAttr placingCannotPlaceAttr $ str "  "
+drawPlacingCell PlacingFree = withAttr emptyCellAttr emptyCell
+drawPlacingCell PlacingFilled = withAttr filledCellAttr filledCell
+drawPlacingCell PlacingCanPlaceFullFigure = withAttr placingCanPlaceFullFigureAttr filledCell
+drawPlacingCell PlacingCanPlaceButNotFullFigure = withAttr placingCanPlaceButNotFullFigure filledCell
+drawPlacingCell PlacingCannotPlace = withAttr placingCannotPlaceAttr filledCell
 
 drawFigure :: (a -> Widget Name) -> Array CellCoord a -> Widget Name
 drawFigure drawOneCell figure = vBox cellRows where

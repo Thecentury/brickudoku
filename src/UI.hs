@@ -21,6 +21,9 @@ import Control.Lens ((^.), (&), (.~))
 import qualified Graphics.Vty as V
 import Data.Array (elems, Array)
 import Data.Functor (void)
+import GHC.Conc.Sync (getUncaughtExceptionHandler, setUncaughtExceptionHandler)
+import Control.Exception (SomeException, Exception (displayException), handle)
+import Text.Printf (printf)
 
 type Name = ()
 
@@ -174,9 +177,16 @@ theMap = attrMap V.defAttr
 
 --- Main ---
 
+lastExceptionHandler :: SomeException -> IO ()
+lastExceptionHandler e = do
+  putStrLn $ "Uncaught exception: " <> displayException e
+
 main :: IO ()
 main = do
   let builder = V.mkVty V.defaultConfig
   initialVty <- builder
   game <- initGame
+  -- Borrowed from https://magnus.therning.org/2023-04-26-some-practical-haskell.html
+  originalHandler <- getUncaughtExceptionHandler
+  setUncaughtExceptionHandler $ handle originalHandler . lastExceptionHandler
   void $ customMain initialVty builder Nothing app game

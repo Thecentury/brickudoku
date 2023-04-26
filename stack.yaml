@@ -1,1 +1,8 @@
 resolver: lts-20.18
+color: always
+compiler: ghc-9.6.1
+extra-deps:
+  - primitive-0.8.0.0
+  - vty-5.38
+  - brick-1.7
+  - text-zipper-0.13

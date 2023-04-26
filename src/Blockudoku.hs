@@ -1,17 +1,19 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE TupleSections #-}
 module Blockudoku where
 
 import Control.Lens hiding ((<|), (|>), (:>), (:<), index)
 import Data.Array ( (!), (//), array, bounds, Array, elems, assocs, listArray )
 import System.Random.Stateful ( globalStdGen, UniformRange(uniformRM) )
 import Control.Monad (replicateM)
-import Data.List (findIndex)
+import Data.List (findIndex, find)
 import qualified Data.List as List
-import Data.Maybe (mapMaybe, fromMaybe, isJust, listToMaybe)
+import Data.Maybe (mapMaybe, fromMaybe, isJust, isNothing)
 
 import MyPrelude
+import qualified Data.Bifunctor
 
 --
 
@@ -51,8 +53,8 @@ markSelectedAsPlaced (Just (Selected _)) = Nothing
 markSelectedAsPlaced (Just (NotSelected a)) = Just $ NotSelected a
 markSelectedAsPlaced Nothing = Nothing
 
-allPlaced :: (Foldable m, Eq a) => m (Maybe a) -> Bool
-allPlaced a = foldl (\soFar item -> soFar && item == Nothing) True a
+allPlaced :: (Foldable m) => m (Maybe a) -> Bool
+allPlaced = foldl (\soFar item -> soFar && isNothing item) True
 
 --- Coordinates
 
@@ -119,7 +121,7 @@ boardToPlacingCells :: Figure -> Array CellCoord PlacingCell
 boardToPlacingCells board =
   board
   & assocs
-  & map (\(coord, cell) -> (coord, boardCellToPlacingCell cell))
+  & map (Data.Bifunctor.second boardCellToPlacingCell)
   & array (bounds board)
 
 tryPlaceFigure :: Figure -> Coord -> Figure -> Maybe Figure
@@ -312,7 +314,7 @@ randomSelectableFigures = do
   rawFigures <- replicateM figuresToPlaceCount randomRawFigure
   let selectableFigures = listArray (0, figuresToPlaceCount - 1) $ map (Just . NotSelected) rawFigures
   -- Select first figure
-  pure $ mapArrayItem 0 select $ selectableFigures
+  pure $ mapArrayItem 0 select selectableFigures
 
 initGame :: IO Game
 initGame = do
@@ -368,7 +370,7 @@ tryFindNextFigureToSelect :: Game -> (Int -> [Int]) -> Maybe Int
 tryFindNextFigureToSelect g nextIndices = do
   currentIndex <- selectedFigureIndex g
   let nexts = map (\i -> (i, (g ^. figures) ! i)) $ nextIndices currentIndex
-  fmap fst $ listToMaybe $ filter (\(_, f) -> canBeSelected f) nexts
+  fst <$> find (\(_, f) -> canBeSelected f) nexts
   where
     canBeSelected :: Maybe (Selectable Figure) -> Bool
     canBeSelected Nothing = False
@@ -430,13 +432,13 @@ placeFigure game =
           let newFigures = game ^. figures & fmap markSelectedAsPlaced
           (newFigures2, turnIncrement) <-
             if allPlaced newFigures then
-              fmap (\f -> (f, 1)) randomSelectableFigures
+              fmap (, 1) randomSelectableFigures
             else
               pure (selectFirstSelectableFigure newFigures, 0)
           pure
             $ state .~ SelectingFigure
             $ figures .~ newFigures2
-            $ board .~ (removeFilledRanges newBoard)
+            $ board .~ removeFilledRanges newBoard
             $ turnNumber +~ turnIncrement
             $ game
         Nothing -> pure game
@@ -445,17 +447,17 @@ placeFigure game =
 -- | Frees cells by specified coordinates
 freeAllCells :: Figure -> [CellCoord] -> Figure
 freeAllCells fig coords =
-  fig // fmap (\coord -> (coord, Free)) coords
+  fig // fmap (, Free) coords
 
 -- | Determines whether all cells by specified coordinates are filled
 allCellsAreFilled :: Figure -> [CellCoord] -> Bool
 allCellsAreFilled fig coords =
-  coords & fmap (\coord -> fig ! coord) & all (== Filled)
+  coords & fmap (fig !) & all (== Filled)
 
 full9Ranges :: [[CellCoord]]
 full9Ranges = allHorizontal ++ allVertical ++ squares where
-  horizontal r  = fmap (\c -> (r, c)) all9
-  vertical   c  = fmap (\r -> (r, c)) all9
+  horizontal r  = fmap (r, ) all9
+  vertical   c  = fmap (, c) all9
   allHorizontal = fmap horizontal all9
   allVertical   = fmap vertical all9
   all9          = [0 .. boardSize - 1]

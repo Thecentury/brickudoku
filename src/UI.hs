@@ -3,8 +3,28 @@
 module UI (main) where
 
 import Blockudoku
+    ( Game,
+      State(PlacingFigure, SelectingFigure),
+      Figure,
+      CellCoord,
+      Selectable(..),
+      PlacingCell(..),
+      Cell(..),
+      boardToPlacingCells,
+      addPlacingFigure,
+      Action(..),
+      board,
+      figures,
+      score,
+      state,
+      turnNumber,
+      emptyFigure,
+      initGame,
+      figureRows,
+      possibleActions )
 
 import Control.Monad.State.Strict
+    ( MonadIO(liftIO), MonadState(put, get) )
 import Brick
   ( App(..), AttrMap, BrickEvent(..), EventM, Widget
   , customMain, neverShowCursor
@@ -17,16 +37,14 @@ import qualified Brick.AttrMap as A
 import qualified Brick.Widgets.Border as B
 import qualified Brick.Widgets.Border.Style as BS
 import qualified Brick.Widgets.Center as C
-import Control.Lens ((^.), (&), (.~))
+import Control.Lens ((^.), (&))
 import qualified Graphics.Vty as V
 import Data.Array (elems, Array)
 import Data.Functor (void)
 import GHC.Conc.Sync (getUncaughtExceptionHandler, setUncaughtExceptionHandler)
 import Control.Exception (SomeException, Exception (displayException), handle)
-import Text.Printf (printf)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (isJust)
 
 type Name = ()
 

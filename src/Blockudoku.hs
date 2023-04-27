@@ -4,7 +4,7 @@
 {-# LANGUAGE TupleSections #-}
 module Blockudoku where
 
-import Control.Lens hiding ((<|), (|>), (:>), (:<), index)
+import Control.Lens ( (&), makeLenses, (^.), (%~), (.~), (+~) )
 import Data.Array ( (!), (//), array, bounds, Array, elems, assocs, listArray )
 import System.Random.Stateful ( globalStdGen, UniformRange(uniformRM) )
 import Control.Monad (replicateM)
@@ -12,10 +12,10 @@ import Data.List (findIndex, find)
 import qualified Data.List as List
 import Data.Maybe (mapMaybe, fromMaybe, isJust, isNothing, catMaybes)
 
-import MyPrelude
+import MyPrelude ( mapArrayItem, mapiArray )
 import qualified Data.Bifunctor
 
---
+----
 
 data Cell =
   Free | Filled

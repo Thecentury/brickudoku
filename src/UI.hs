@@ -64,11 +64,12 @@ keyBindings =
     ((V.KUp, []), [MoveFigureUp]),
     ((V.KDown, []), [MoveFigureDown]),
     ((V.KEnter, []), [StartPlacingFigure, PlaceFigure]),
-    ((V.KEsc, []), [CancelPlacingFigure])
+    ((V.KEsc, []), [CancelPlacingFigure]),
+    ((V.KChar 'R', []), [RestartGame])
   ]
 
 handleEvent :: BrickEvent Name () -> EventM Name Game ()
-handleEvent (VtyEvent (V.EvKey (V.KChar 'q') [])) = halt
+handleEvent (VtyEvent (V.EvKey (V.KChar 'Q') [])) = halt
 handleEvent (VtyEvent (V.EvKey key modifiers)) = do
   game <- get
   actions <- liftIO $ possibleActions game

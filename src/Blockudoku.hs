@@ -462,30 +462,37 @@ data Action =
   MoveFigureUp |
   StartPlacingFigure |
   CancelPlacingFigure |
-  PlaceFigure
+  PlaceFigure |
+  RestartGame
   deriving stock (Eq, Show)
+
+restartGameAction :: IO (Maybe (Action, Game))
+restartGameAction = (\g -> Just (RestartGame, g)) <$> initGame
 
 possibleActions :: Game -> IO [(Action, Game)]
 possibleActions game = do
   case game ^. state of
-    SelectingFigure ->
-      pure $ catMaybes
-        [
-          moveFigure SelectNextFigure nextFigureIndices,
-          moveFigure SelectPreviousFigure previousFigureIndices,
-          startPlacing
-        ] where
-        setSelected indexToSelect = mapiArray (\i x -> if i == indexToSelect then select x else deselect x)
+    SelectingFigure -> actions where
+      actions = do
+        newGame <- restartGameAction
+        pure $ catMaybes
+          [
+            moveFigure SelectNextFigure nextFigureIndices,
+            moveFigure SelectPreviousFigure previousFigureIndices,
+            startPlacing,
+            newGame
+          ]
+      setSelected indexToSelect = mapiArray (\i x -> if i == indexToSelect then select x else deselect x)
 
-        moveFigure action nextIndices = do
-          nextIx <- tryFindNextFigureToSelect game nextIndices
-          let game' = game & figures %~ setSelected nextIx
-          pure (action, game')
+      moveFigure action nextIndices = do
+        nextIx <- tryFindNextFigureToSelect game nextIndices
+        let game' = game & figures %~ setSelected nextIx
+        pure (action, game')
 
-        startPlacing = do
-          selectedFigure_ <- selectedFigure game
-          let game' = game & state .~ PlacingFigure selectedFigure_ zeroCoord
-          pure (StartPlacingFigure, game')
+      startPlacing = do
+        selectedFigure_ <- selectedFigure game
+        let game' = game & state .~ PlacingFigure selectedFigure_ zeroCoord
+        pure (StartPlacingFigure, game')
 
     PlacingFigure fig coord -> actions where
       board_ = game ^. board
@@ -518,12 +525,16 @@ possibleActions game = do
       actions :: IO [(Action, Game)]
       actions = do
         place' <- place
+        newGame <- restartGameAction
         pure $ catMaybes [
             tryMove vectorRight MoveFigureRight,
             tryMove vectorLeft MoveFigureLeft,
             tryMove vectorDown MoveFigureDown,
             tryMove vectorUp MoveFigureUp,
             place',
+            newGame,
             Just (CancelPlacingFigure, game & state .~ SelectingFigure)
           ]
-    GameOver -> pure [] -- todo here we can add "restart" action
+    GameOver -> do
+      newGame <- restartGameAction
+      pure $ catMaybes [newGame]

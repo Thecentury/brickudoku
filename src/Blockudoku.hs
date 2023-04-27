@@ -2,7 +2,26 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE TupleSections #-}
-module Blockudoku where
+module Blockudoku
+  ( Game,
+    State(PlacingFigure, SelectingFigure),
+    Figure,
+    CellCoord,
+    Selectable(..),
+    PlacingCell(..),
+    Cell(..),
+    boardToPlacingCells,
+    addPlacingFigure,
+    Action(..),
+    board,
+    figures,
+    score,
+    state,
+    turnNumber,
+    emptyFigure,
+    initGame,
+    figureRows,
+    possibleActions ) where
 
 import Control.Lens ( (&), makeLenses, (^.), (%~), (.~), (+~) )
 import Data.Array ( (!), (//), array, bounds, Array, elems, assocs, listArray )
@@ -10,7 +29,7 @@ import System.Random.Stateful ( globalStdGen, UniformRange(uniformRM) )
 import Control.Monad (replicateM)
 import Data.List (findIndex, find)
 import qualified Data.List as List
-import Data.Maybe (mapMaybe, fromMaybe, isJust, isNothing, catMaybes)
+import Data.Maybe (mapMaybe, isJust, isNothing, catMaybes)
 
 import MyPrelude ( mapArrayItem, mapiArray )
 import qualified Data.Bifunctor
@@ -27,10 +46,6 @@ data PlacingCell =
   PlacingCanPlaceFullFigure |
   PlacingCanPlaceButNotFullFigure |
   PlacingCannotPlace
-  deriving stock (Show, Eq)
-
--- todo is it needed?
-data CanBePlaced = CanBePlaced | CanNotBePlaced
   deriving stock (Show, Eq)
 
 data Selectable a =
@@ -63,9 +78,6 @@ data Coord = Coord { _x :: Int, _y :: Int }
 
 zeroCoord :: Coord
 zeroCoord = Coord { _x = 0, _y = 0 }
-
-coordToCellCoord :: Coord -> CellCoord
-coordToCellCoord (Coord x y) = (y, x)
 
 data Vector = Vector { _dx :: Int, _dy :: Int }
   deriving stock (Show, Eq)
@@ -398,54 +410,7 @@ selectFirstSelectableFigure figs =
         Just (Selected _) -> figs
         Just (NotSelected a) -> figs // [(index, Just (Selected a))]
 
-selectNextFigure :: (Int -> [Int]) -> Game -> Game
-selectNextFigure nextIndices game =
-  maybe game (\nextIx -> game & figures %~ setSelected nextIx) nextIndex where
-    setSelected indexToSelect = mapiArray (\i x -> if i == indexToSelect then select x else deselect x)
-    nextIndex = tryFindNextFigureToSelect game nextIndices
-
-startPlacingFigure :: Game -> Game
-startPlacingFigure game =
-  maybe game (\f -> game & state .~ PlacingFigure f zeroCoord) (selectedFigure game)
-
-cancelPlacingFigure :: Game -> Game
-cancelPlacingFigure game =
-  case game ^. state of
-    PlacingFigure _ _ -> game & state .~ SelectingFigure
-    _ -> game
-
----
-
-movePlacingFigure :: Game -> Direction -> Game
-movePlacingFigure game direction =
-  case game ^. state of
-    PlacingFigure figure coord ->
-      let
-        newCoord = fromMaybe coord $ tryMoveFigure game._board figure coord (directionToVector direction)
-      in
-        state .~ PlacingFigure figure newCoord $ game
-    _ -> game
-
-placeFigure :: Game -> IO Game
-placeFigure game =
-  case game ^. state of
-    PlacingFigure figure coord ->
-      case tryPlaceFigure figure coord $ game ^. board of
-        Just newBoard -> do
-          let newFigures = game ^. figures & fmap markSelectedAsPlaced
-          (newFigures2, turnIncrement) <-
-            if allPlaced newFigures then
-              fmap (, 1) randomSelectableFigures
-            else
-              pure (selectFirstSelectableFigure newFigures, 0)
-          pure
-            $ state .~ SelectingFigure
-            $ figures .~ newFigures2
-            $ board .~ removeFilledRanges newBoard
-            $ turnNumber +~ turnIncrement
-            $ game
-        Nothing -> pure game
-    _ -> pure game
+----
 
 -- | Frees cells by specified coordinates
 freeAllCells :: Figure -> [CellCoord] -> Figure

@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE NumericUnderscores #-}
 {-# OPTIONS_GHC -Wno-unused-imports #-}
 module UI (main) where
 
@@ -12,6 +13,8 @@ import Blockudoku
       Cell(..),
       boardToPlacingCells,
       addPlacingFigure,
+      UserAction(..),
+      SystemAction(..),
       Action(..),
       board,
       figures,
@@ -21,7 +24,7 @@ import Blockudoku
       emptyFigure,
       initGame,
       figureRows,
-      possibleActions )
+      possibleActions, GameEvent (..) )
 
 import Control.Monad.State.Strict
     ( MonadIO(liftIO), MonadState(put, get) )
@@ -45,10 +48,13 @@ import GHC.Conc.Sync (getUncaughtExceptionHandler, setUncaughtExceptionHandler)
 import Control.Exception (SomeException, Exception (displayException), handle)
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Brick.BChan (newBChan, writeBChan)
+import Control.Concurrent (threadDelay, forkIO)
+import Control.Monad (forever)
 
 type Name = ()
 
-app :: App Game () Name
+app :: App Game GameEvent Name
 app = App { appDraw = drawUI
           , appChooseCursor = neverShowCursor
           , appHandleEvent = handleEvent
@@ -56,24 +62,26 @@ app = App { appDraw = drawUI
           , appAttrMap = const theMap
           }
 
-keyBindings :: Map (V.Key, [V.Modifier]) [Action]
+keyBindings :: Map (BrickEvent Name GameEvent) [Action]
 keyBindings =
   Map.fromList [
-    ((V.KRight, []), [MoveFigureRight, SelectNextFigure]),
-    ((V.KLeft, []), [MoveFigureLeft, SelectPreviousFigure]),
-    ((V.KUp, []), [MoveFigureUp]),
-    ((V.KDown, []), [MoveFigureDown]),
-    ((V.KEnter, []), [StartPlacingFigure, PlaceFigure]),
-    ((V.KEsc, []), [CancelPlacingFigure]),
-    ((V.KChar 'R', []), [RestartGame])
+    (VtyEvent (V.EvKey V.KRight []), [UserAction MoveFigureRight, UserAction SelectNextFigure]),
+    (VtyEvent (V.EvKey V.KLeft []), [UserAction MoveFigureLeft, UserAction SelectPreviousFigure]),
+    (VtyEvent (V.EvKey V.KUp []), [UserAction MoveFigureUp]),
+    (VtyEvent (V.EvKey V.KDown []), [UserAction MoveFigureDown]),
+    (VtyEvent (V.EvKey V.KEnter []), [UserAction StartPlacingFigure, UserAction PlaceFigure]),
+    (VtyEvent (V.EvKey V.KEsc []), [UserAction CancelPlacingFigure]),
+    (VtyEvent (V.EvKey (V.KChar 'R') []), [SystemAction RestartGame]),
+    (VtyEvent (V.EvKey (V.KChar 'A') []), [SystemAction ToggleAutoPlay]),
+    (AppEvent Tick, [SystemAction NextAutoPlayTurn])
   ]
 
-handleEvent :: BrickEvent Name () -> EventM Name Game ()
+handleEvent :: BrickEvent Name GameEvent -> EventM Name Game ()
 handleEvent (VtyEvent (V.EvKey (V.KChar 'Q') [])) = halt
-handleEvent (VtyEvent (V.EvKey key modifiers)) = do
+handleEvent evt = do
   game <- get
   actions <- liftIO $ possibleActions game
-  case Map.lookup (key, modifiers) keyBindings of
+  case Map.lookup evt keyBindings of
     Just applicableKeyBindingActions ->
       let
         actionsToApply = filter (\(a, _) -> a `elem` applicableKeyBindingActions) actions
@@ -81,10 +89,10 @@ handleEvent (VtyEvent (V.EvKey key modifiers)) = do
         case actionsToApply of
           [] -> pure ()
           [(_, newGame)] -> put newGame
-          _ -> error $ "Multiple applicable actions for key " ++ show key ++ " " ++ show modifiers ++ ": " ++ show (fmap fst actionsToApply)
+          _ -> error $ "Multiple applicable actions for key " ++ show evt ++ ": " ++ show (fmap fst actionsToApply)
     Nothing -> pure ()
-handleEvent _ = pure ()
 
+-- todo display whether an auto play is enabled
 drawUI :: Game -> [Widget Name]
 drawUI game =
   [
@@ -200,4 +208,10 @@ main = do
   -- Borrowed from https://magnus.therning.org/2023-04-26-some-practical-haskell.html
   originalHandler <- getUncaughtExceptionHandler
   setUncaughtExceptionHandler $ handle originalHandler . lastExceptionHandler
-  void $ customMain initialVty builder Nothing app game
+  chan <- newBChan 10
+  let delay = 100_000 -- 100 ms
+  void . forkIO $ forever $ do
+    writeBChan chan Tick
+    threadDelay delay
+
+  void $ customMain initialVty builder (Just chan) app game

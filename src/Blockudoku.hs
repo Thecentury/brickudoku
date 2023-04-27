@@ -12,7 +12,10 @@ module Blockudoku
     Cell(..),
     boardToPlacingCells,
     addPlacingFigure,
+    UserAction(..),
+    SystemAction(..),
     Action(..),
+    GameEvent(..),
     board,
     figures,
     score,
@@ -33,6 +36,7 @@ import Data.Maybe (mapMaybe, isJust, isNothing, catMaybes)
 
 import MyPrelude ( mapArrayItem, mapiArray )
 import qualified Data.Bifunctor
+import System.Random (randomRIO)
 
 ----
 
@@ -197,12 +201,17 @@ data State =
   GameOver
   deriving stock (Show, Eq)
 
+-- | Ticks mark passing of time
+data GameEvent = Tick
+  deriving stock (Show, Eq, Ord)
+
 data Game = Game
   { _score :: Int,
     _board :: Figure,
     _figures :: Array Int (Maybe (Selectable Figure)),
     _state :: State,
-    _turnNumber :: Int }
+    _turnNumber :: Int,
+    _autoPlay :: Bool }
   deriving stock (Show)
 
 makeLenses ''Game
@@ -345,7 +354,8 @@ initGame = do
           _board = _board,
           _figures = selectedFirstFigure,
           _state = SelectingFigure,
-          _turnNumber = 1 }
+          _turnNumber = 1,
+          _autoPlay = False }
   return game
 
 rowCells :: Int -> Array CellCoord a -> [a]
@@ -453,7 +463,7 @@ canBePlacedToBoardAtSomePoint fig b =
 
 ---- Commands
 
-data Action =
+data UserAction =
   SelectNextFigure |
   SelectPreviousFigure |
   MoveFigureRight |
@@ -462,25 +472,76 @@ data Action =
   MoveFigureUp |
   StartPlacingFigure |
   CancelPlacingFigure |
-  PlaceFigure |
-  RestartGame
+  PlaceFigure
   deriving stock (Eq, Show)
 
-restartGameAction :: IO (Maybe (Action, Game))
-restartGameAction = (\g -> Just (RestartGame, g)) <$> initGame
+data SystemAction =
+  RestartGame |
+  NextAutoPlayTurn |
+  ToggleAutoPlay
+  deriving stock (Eq, Show)
 
-possibleActions :: Game -> IO [(Action, Game)]
-possibleActions game = do
+data Action =
+  UserAction UserAction |
+  SystemAction SystemAction
+  deriving stock (Eq, Show)
+
+onlyUserAction :: Action -> Maybe UserAction
+onlyUserAction (UserAction a) = Just a
+onlyUserAction _ = Nothing
+
+userActionProbability :: UserAction -> Int
+userActionProbability PlaceFigure = 30
+userActionProbability CancelPlacingFigure = 1
+userActionProbability _ = 10
+
+restartGameAction :: IO (Maybe (Action, Game))
+restartGameAction = (\g -> Just (SystemAction RestartGame, g)) <$> initGame
+
+toggleAutoPlayAction :: Game -> Maybe (Action, Game)
+toggleAutoPlayAction game =
+  Just (SystemAction ToggleAutoPlay, game & autoPlay %~ not)
+
+nextAutoPlayTurnAction :: Game -> Bool -> IO (Maybe (Action, Game))
+nextAutoPlayTurnAction game generateAutoPlay = do
+  if game ^. autoPlay && generateAutoPlay then
+    nextAction
+  else
+    pure Nothing
+  where
+    nextAction :: IO (Maybe (Action, Game))
+    nextAction = do
+      actions <- possibleActionsImpl game False
+      let applicableActions = mapMaybe (\(a, g) -> (, g) <$> onlyUserAction a) actions
+      if null applicableActions then
+        pure Nothing
+      else do
+        (_, game') <- randomElement $ actionsAccordingToProbability applicableActions
+        pure $ Just (SystemAction NextAutoPlayTurn, game')
+
+actionsAccordingToProbability :: [(UserAction, a)] -> [(UserAction, a)]
+actionsAccordingToProbability = concatMap (\(action, game) -> replicate (userActionProbability action) (action, game))
+
+randomElement :: [a] -> IO a
+randomElement list = do
+  randomIndex <- randomRIO (0, length list - 1)
+  pure $ list !! randomIndex
+
+possibleActionsImpl :: Game -> Bool -> IO [(Action, Game)]
+possibleActionsImpl game generateAutoPlay = do
   case game ^. state of
     SelectingFigure -> actions where
       actions = do
         newGame <- restartGameAction
+        autoPlayTurn <- nextAutoPlayTurnAction game generateAutoPlay
         pure $ catMaybes
           [
-            moveFigure SelectNextFigure nextFigureIndices,
-            moveFigure SelectPreviousFigure previousFigureIndices,
+            moveFigure (UserAction SelectNextFigure) nextFigureIndices,
+            moveFigure (UserAction SelectPreviousFigure) previousFigureIndices,
             startPlacing,
-            newGame
+            newGame,
+            toggleAutoPlayAction game,
+            autoPlayTurn
           ]
       setSelected indexToSelect = mapiArray (\i x -> if i == indexToSelect then select x else deselect x)
 
@@ -492,7 +553,7 @@ possibleActions game = do
       startPlacing = do
         selectedFigure_ <- selectedFigure game
         let game' = game & state .~ PlacingFigure selectedFigure_ zeroCoord
-        pure (StartPlacingFigure, game')
+        pure (UserAction StartPlacingFigure, game')
 
     PlacingFigure fig coord -> actions where
       board_ = game ^. board
@@ -520,21 +581,27 @@ possibleActions game = do
                   $ board .~ removeFilledRanges newBoard
                   $ turnNumber +~ turnIncrement
                   $ game
-            pure $ Just (PlaceFigure, g')
+            pure $ Just (UserAction PlaceFigure, g')
 
       actions :: IO [(Action, Game)]
       actions = do
         place' <- place
         newGame <- restartGameAction
+        autoPlayTurn <- nextAutoPlayTurnAction game generateAutoPlay
         pure $ catMaybes [
-            tryMove vectorRight MoveFigureRight,
-            tryMove vectorLeft MoveFigureLeft,
-            tryMove vectorDown MoveFigureDown,
-            tryMove vectorUp MoveFigureUp,
+            tryMove vectorRight $ UserAction MoveFigureRight,
+            tryMove vectorLeft $ UserAction MoveFigureLeft,
+            tryMove vectorDown $ UserAction MoveFigureDown,
+            tryMove vectorUp $ UserAction MoveFigureUp,
             place',
             newGame,
-            Just (CancelPlacingFigure, game & state .~ SelectingFigure)
+            toggleAutoPlayAction game,
+            autoPlayTurn,
+            Just (UserAction CancelPlacingFigure, game & state .~ SelectingFigure)
           ]
     GameOver -> do
       newGame <- restartGameAction
       pure $ catMaybes [newGame]
+
+possibleActions :: Game -> IO [(Action, Game)]
+possibleActions game = possibleActionsImpl game True

@@ -57,15 +57,12 @@ handleEvent (VtyEvent (V.EvKey key modifiers)) = do
   case Map.lookup (key, modifiers) keyBindings of
     Just applicableKeyBindingActions ->
       let
-        actionsToApply = filter (\a -> isJust $ lookup a actions) applicableKeyBindingActions
+        actionsToApply = filter (\(a, _) -> a `elem` applicableKeyBindingActions) actions
       in
         case actionsToApply of
           [] -> pure ()
-          [act] ->
-            case lookup act actions of
-              Just newGame -> put newGame
-              Nothing -> error $ "Action " ++ show act ++ " not found in " ++ show actions
-          _ -> error $ "Multiple applicable actions for key " ++ show key ++ " " ++ show modifiers ++ ": " ++ show actionsToApply
+          [(_, newGame)] -> put newGame
+          _ -> error $ "Multiple applicable actions for key " ++ show key ++ " " ++ show modifiers ++ ": " ++ show (fmap fst actionsToApply)
     Nothing -> pure ()
 handleEvent _ = pure ()
 

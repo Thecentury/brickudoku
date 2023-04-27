@@ -24,6 +24,9 @@ import Data.Functor (void)
 import GHC.Conc.Sync (getUncaughtExceptionHandler, setUncaughtExceptionHandler)
 import Control.Exception (SomeException, Exception (displayException), handle)
 import Text.Printf (printf)
+import Data.Map (Map)
+import qualified Data.Map as Map
+import Data.Maybe (isJust)
 
 type Name = ()
 
@@ -35,44 +38,36 @@ app = App { appDraw = drawUI
           , appAttrMap = const theMap
           }
 
+keyBindings :: Map (V.Key, [V.Modifier]) [Action]
+keyBindings =
+  Map.fromList [
+    ((V.KRight, []), [MoveFigureRight, SelectNextFigure]),
+    ((V.KLeft, []), [MoveFigureLeft, SelectPreviousFigure]),
+    ((V.KUp, []), [MoveFigureUp]),
+    ((V.KDown, []), [MoveFigureDown]),
+    ((V.KEnter, []), [StartPlacingFigure, PlaceFigure]),
+    ((V.KEsc, []), [CancelPlacingFigure])
+  ]
+
 handleEvent :: BrickEvent Name () -> EventM Name Game ()
 handleEvent (VtyEvent (V.EvKey (V.KChar 'q') [])) = halt
-handleEvent (VtyEvent (V.EvKey V.KRight [])) =
-  modify $ \game ->
-    case game ^. Blockudoku.state of
-      SelectingFigure -> selectNextFigure nextFigureIndices game
-      PlacingFigure _ _ -> movePlacingFigure game DirRight
-      _ -> game
-handleEvent (VtyEvent (V.EvKey V.KLeft [])) =
-  modify $ \game ->
-    case game ^. Blockudoku.state of
-      SelectingFigure -> selectNextFigure previousFigureIndices game
-      PlacingFigure _ _ -> movePlacingFigure game DirLeft
-      _ -> game
-handleEvent (VtyEvent (V.EvKey V.KUp [])) =
-  modify $ \game ->
-    case game ^. Blockudoku.state of
-      PlacingFigure _ _ -> movePlacingFigure game DirUp
-      _ -> game
-handleEvent (VtyEvent (V.EvKey V.KDown [])) =
-  modify $ \game ->
-    case game ^. Blockudoku.state of
-      PlacingFigure _ _ -> movePlacingFigure game DirDown
-      _ -> game
-handleEvent (VtyEvent (V.EvKey V.KEnter [])) = do
+handleEvent (VtyEvent (V.EvKey key modifiers)) = do
   game <- get
-  game2 <-
-    case game ^. Blockudoku.state of
-      SelectingFigure -> pure $ startPlacingFigure game
-      PlacingFigure _ _ -> liftIO $ placeFigure game
-      _ -> pure game
-  put game2
-handleEvent (VtyEvent (V.EvKey V.KEsc [])) =
-  modify $ \game ->
-    case game ^. Blockudoku.state of
-      PlacingFigure _ _ -> cancelPlacingFigure game
-      _ -> game
-handleEvent _ = return ()
+  actions <- liftIO $ possibleActions game
+  case Map.lookup (key, modifiers) keyBindings of
+    Just applicableKeyBindingActions ->
+      let
+        actionsToApply = filter (\a -> isJust $ lookup a actions) applicableKeyBindingActions
+      in
+        case actionsToApply of
+          [] -> pure ()
+          [act] ->
+            case lookup act actions of
+              Just newGame -> put newGame
+              Nothing -> error $ "Action " ++ show act ++ " not found in " ++ show actions
+          _ -> error $ "Multiple applicable actions for key " ++ show key ++ " " ++ show modifiers ++ ": " ++ show actionsToApply
+    Nothing -> pure ()
+handleEvent _ = pure ()
 
 drawUI :: Game -> [Widget Name]
 drawUI game =

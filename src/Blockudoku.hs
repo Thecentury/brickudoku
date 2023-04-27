@@ -61,6 +61,9 @@ allPlaced = foldl (\soFar item -> soFar && isNothing item) True
 data Coord = Coord { _x :: Int, _y :: Int }
   deriving stock (Show, Eq)
 
+zeroCoord :: Coord
+zeroCoord = Coord { _x = 0, _y = 0 }
+
 coordToCellCoord :: Coord -> CellCoord
 coordToCellCoord (Coord x y) = (y, x)
 
@@ -174,7 +177,7 @@ addPlacingFigure figure figureCoord board =
         (Free, Free, _) -> PlacingFree
 
 data State =
-  SelectingFigure |
+  SelectingFigure | -- todo it can hold figure and its index
   PlacingFigure Figure Coord |
   GameOver
   deriving stock (Show, Eq)
@@ -403,7 +406,7 @@ selectNextFigure nextIndices game =
 
 startPlacingFigure :: Game -> Game
 startPlacingFigure game =
-  maybe game (\f -> game & state .~ PlacingFigure f (Coord { _x = 0, _y = 0 })) (selectedFigure game)
+  maybe game (\f -> game & state .~ PlacingFigure f zeroCoord) (selectedFigure game)
 
 cancelPlacingFigure :: Game -> Game
 cancelPlacingFigure game =
@@ -492,29 +495,67 @@ data Action =
   StartPlacingFigure |
   CancelPlacingFigure |
   PlaceFigure
-  deriving (Eq, Show)
+  deriving stock (Eq, Show)
 
-possibleActions :: Game -> [Action]
-possibleActions game =
+possibleActions :: Game -> IO [(Action, Game)]
+possibleActions game = do
   case game ^. state of
     SelectingFigure ->
-      let
-        next = const SelectNextFigure <$> tryFindNextFigureToSelect game nextFigureIndices
-        prev = const SelectPreviousFigure <$> tryFindNextFigureToSelect game previousFigureIndices
-      in
-        catMaybes [next, prev, Just StartPlacingFigure]
-    PlacingFigure fig coord ->
-      let
-        board_ = game ^. board
-        canMove dir action = const action <$> tryMoveFigure board_ fig coord (directionToVector dir)
-        place = const PlaceFigure <$> tryPlaceFigure fig coord board_
-      in
-        catMaybes [
-          canMove DirRight MoveFigureRight,
-          canMove DirLeft MoveFigureLeft,
-          canMove DirDown MoveFigureDown,
-          canMove DirUp MoveFigureUp,
-          place,
-          Just CancelPlacingFigure
-        ]
-    GameOver -> [] -- todo here we can add "restart" action
+      pure $ catMaybes
+        [
+          moveFigure SelectNextFigure nextFigureIndices,
+          moveFigure SelectPreviousFigure previousFigureIndices,
+          startPlacing
+        ] where
+        setSelected indexToSelect = mapiArray (\i x -> if i == indexToSelect then select x else deselect x)
+
+        moveFigure action nextIndices = do
+          nextIx <- tryFindNextFigureToSelect game nextIndices
+          let game' = game & figures %~ setSelected nextIx
+          pure (action, game')
+
+        startPlacing = do
+          selectedFigure_ <- selectedFigure game
+          let game' = game & state .~ PlacingFigure selectedFigure_ zeroCoord
+          pure (StartPlacingFigure, game')
+
+    PlacingFigure fig coord -> actions where
+      board_ = game ^. board
+
+      tryMove :: Direction -> Action -> Maybe (Action, Game)
+      tryMove dir action = do
+        newCoord <- tryMoveFigure board_ fig coord (directionToVector dir)
+        let game' = game & state .~ PlacingFigure fig newCoord
+        pure (action, game')
+
+      place :: IO (Maybe (Action, Game))
+      place = do
+        case tryPlaceFigure fig coord board_ of
+          Nothing -> pure Nothing
+          Just newBoard -> do
+            let newFigures = game ^. figures & fmap markSelectedAsPlaced
+            (newFigures2, turnIncrement) <-
+              if allPlaced newFigures then
+                fmap (, 1) randomSelectableFigures
+              else
+                pure (selectFirstSelectableFigure newFigures, 0)
+            let g' =
+                  state .~ SelectingFigure
+                  $ figures .~ newFigures2
+                  $ board .~ removeFilledRanges newBoard
+                  $ turnNumber +~ turnIncrement
+                  $ game
+            pure $ Just (PlaceFigure, g')
+
+      actions :: IO [(Action, Game)]
+      actions = do
+        place' <- place
+        pure $ catMaybes [
+            tryMove DirRight MoveFigureRight,
+            tryMove DirLeft MoveFigureLeft,
+            tryMove DirDown MoveFigureDown,
+            tryMove DirUp MoveFigureUp,
+            place',
+            Just (CancelPlacingFigure, game & state .~ SelectingFigure)
+          ]
+    GameOver -> pure [] -- todo here we can add "restart" action

@@ -10,7 +10,7 @@ import System.Random.Stateful ( globalStdGen, UniformRange(uniformRM) )
 import Control.Monad (replicateM)
 import Data.List (findIndex, find)
 import qualified Data.List as List
-import Data.Maybe (mapMaybe, fromMaybe, isJust, isNothing)
+import Data.Maybe (mapMaybe, fromMaybe, isJust, isNothing, catMaybes)
 
 import MyPrelude
 import qualified Data.Bifunctor
@@ -479,3 +479,42 @@ canBePlacedToBoardAtSomePoint :: Figure -> Figure -> Bool
 canBePlacedToBoardAtSomePoint fig b =
   List.any (\coord -> tryPlaceFigure fig coord b & isJust) starts where
     starts = possibleFigureStartCoordinates fig
+
+---- Commands
+
+data Action =
+  SelectNextFigure |
+  SelectPreviousFigure |
+  MoveFigureRight |
+  MoveFigureLeft |
+  MoveFigureDown |
+  MoveFigureUp |
+  StartPlacingFigure |
+  CancelPlacingFigure |
+  PlaceFigure
+  deriving (Eq, Show)
+
+possibleActions :: Game -> [Action]
+possibleActions game =
+  case game ^. state of
+    SelectingFigure ->
+      let
+        next = const SelectNextFigure <$> tryFindNextFigureToSelect game nextFigureIndices
+        prev = const SelectPreviousFigure <$> tryFindNextFigureToSelect game previousFigureIndices
+      in
+        catMaybes [next, prev, Just StartPlacingFigure]
+    PlacingFigure fig coord ->
+      let
+        board_ = game ^. board
+        canMove dir action = const action <$> tryMoveFigure board_ fig coord (directionToVector dir)
+        place = const PlaceFigure <$> tryPlaceFigure fig coord board_
+      in
+        catMaybes [
+          canMove DirRight MoveFigureRight,
+          canMove DirLeft MoveFigureLeft,
+          canMove DirDown MoveFigureDown,
+          canMove DirUp MoveFigureUp,
+          place,
+          Just CancelPlacingFigure
+        ]
+    GameOver -> [] -- todo here we can add "restart" action

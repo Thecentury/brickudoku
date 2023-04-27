@@ -82,14 +82,17 @@ zeroCoord = Coord { _x = 0, _y = 0 }
 data Vector = Vector { _dx :: Int, _dy :: Int }
   deriving stock (Show, Eq)
 
-data Direction = DirUp | DirDown | DirLeft | DirRight
-  deriving stock (Show, Eq)
+vectorUp :: Vector
+vectorUp = Vector { _dx = 0, _dy = -1 }
 
-directionToVector :: Direction -> Vector
-directionToVector DirUp = Vector { _dx = 0, _dy = -1 }
-directionToVector DirDown = Vector { _dx = 0, _dy = 1 }
-directionToVector DirLeft = Vector { _dx = -1, _dy = 0 }
-directionToVector DirRight = Vector { _dx = 1, _dy = 0 }
+vectorDown :: Vector
+vectorDown = Vector { _dx = 0, _dy = 1 }
+
+vectorLeft :: Vector
+vectorLeft = Vector { _dx = -1, _dy = 0 }
+
+vectorRight :: Vector
+vectorRight = Vector { _dx = 1, _dy = 0 } 
 
 addVector :: Coord -> Vector -> Coord
 addVector (Coord x y) (Vector dx dy) = Coord (x + dx) (y + dy)
@@ -487,9 +490,9 @@ possibleActions game = do
     PlacingFigure fig coord -> actions where
       board_ = game ^. board
 
-      tryMove :: Direction -> Action -> Maybe (Action, Game)
-      tryMove dir action = do
-        newCoord <- tryMoveFigure board_ fig coord (directionToVector dir)
+      tryMove :: Vector -> Action -> Maybe (Action, Game)
+      tryMove movement action = do
+        newCoord <- tryMoveFigure board_ fig coord movement
         let game' = game & state .~ PlacingFigure fig newCoord
         pure (action, game')
 
@@ -516,10 +519,10 @@ possibleActions game = do
       actions = do
         place' <- place
         pure $ catMaybes [
-            tryMove DirRight MoveFigureRight,
-            tryMove DirLeft MoveFigureLeft,
-            tryMove DirDown MoveFigureDown,
-            tryMove DirUp MoveFigureUp,
+            tryMove vectorRight MoveFigureRight,
+            tryMove vectorLeft MoveFigureLeft,
+            tryMove vectorDown MoveFigureDown,
+            tryMove vectorUp MoveFigureUp,
             place',
             Just (CancelPlacingFigure, game & state .~ SelectingFigure)
           ]

@@ -5,7 +5,7 @@ module UI (main) where
 
 import Blockudoku
     ( Game,
-      State(PlacingFigure, SelectingFigure),
+      GameState(PlacingFigure, SelectingFigure),
       Figure,
       CellCoord,
       Selectable(..),
@@ -24,7 +24,9 @@ import Blockudoku
       emptyFigure,
       initGame,
       figureRows,
-      possibleActions, GameEvent (..) )
+      possibleActions,
+      GameEvent (..),
+      figureInSelection )
 
 import Control.Monad.State.Strict
     ( MonadIO(liftIO), MonadState(put, get) )
@@ -104,7 +106,7 @@ drawUI game =
       $ withBorderStyle BS.unicodeRounded
       $ B.border
       $ hBox
-      $ map (vLimit 6 . C.vCenter . drawFigureToPlace (game ^. Blockudoku.state == SelectingFigure)) $ elems $ game ^. figures
+      $ map (vLimit 6 . C.vCenter . drawFigureToPlace (game ^. Blockudoku.state)) $ elems $ game ^. figures
 
 drawScore :: Game -> Widget Name
 drawScore game =
@@ -123,7 +125,7 @@ drawGrid game =
   $ drawFigure drawPlacingCell boardToDraw
   where
     boardToDraw = case game ^. Blockudoku.state of
-      PlacingFigure figure coord -> addPlacingFigure figure coord $ game ^. board
+      PlacingFigure figure coord -> addPlacingFigure (figure ^. figureInSelection) coord $ game ^. board
       _ -> game ^. board & boardToPlacingCells
 
 filledCell :: Widget n
@@ -165,10 +167,10 @@ drawSomeFigureToPlace mapping borderStyle drawOneCell figure =
  $ C.center
  $ drawFigure drawOneCell figure
 
-drawFigureToPlace :: Bool -> Maybe (Selectable Figure) -> Widget Name
+drawFigureToPlace :: GameState -> Maybe (Selectable Figure) -> Widget Name
 drawFigureToPlace _ Nothing = drawSomeFigureToPlace notSelectedFigureBorderMappings BS.unicodeRounded (\_ -> withAttr emptyCellAttr $ str "  ") emptyFigure
-drawFigureToPlace True (Just (Selected figure)) = drawSomeFigureToPlace selectedFigureBorderMappings BS.unicodeBold drawCell figure
-drawFigureToPlace False (Just (Selected figure)) = drawSomeFigureToPlace selectedPlacingFigureBorderMappings BS.unicodeRounded drawCell figure
+drawFigureToPlace (SelectingFigure _) (Just (Selected figure)) = drawSomeFigureToPlace selectedFigureBorderMappings BS.unicodeBold drawCell figure
+drawFigureToPlace _ (Just (Selected figure)) = drawSomeFigureToPlace selectedPlacingFigureBorderMappings BS.unicodeRounded drawCell figure
 drawFigureToPlace _ (Just (NotSelected figure)) = drawSomeFigureToPlace notSelectedFigureBorderMappings BS.unicodeRounded drawCell figure
 
 drawCell :: Cell -> Widget Name

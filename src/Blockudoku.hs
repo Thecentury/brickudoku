@@ -4,14 +4,16 @@
 {-# LANGUAGE TupleSections #-}
 module Blockudoku
   ( Game,
-    State(PlacingFigure, SelectingFigure),
+    GameState(PlacingFigure, SelectingFigure),
     Figure,
     CellCoord,
     Selectable(..),
     PlacingCell(..),
     Cell(..),
+    FigureInSelection,
+    figureInSelection,
     boardToPlacingCells,
-    addPlacingFigure,
+    addPlacingFigure, -- todo review how it is used.
     UserAction(..),
     SystemAction(..),
     Action(..),
@@ -190,9 +192,18 @@ addPlacingFigure figure figureCoord board =
         (Free, Filled, False) -> PlacingCanPlaceButNotFullFigure
         (Free, Free, _) -> PlacingFree
 
-data State =
-  SelectingFigure | -- todo it can hold figure and its index
-  PlacingFigure Figure Coord |
+type FigureIndex = Int
+
+data FigureInSelection = FigureInSelection
+  { _figureInSelection :: Figure,
+    _figureIndex :: FigureIndex }
+  deriving stock (Show, Eq)
+
+makeLenses ''FigureInSelection
+
+data GameState =
+  SelectingFigure FigureInSelection |
+  PlacingFigure FigureInSelection Coord |
   GameOver
   deriving stock (Show, Eq)
 
@@ -204,7 +215,7 @@ data Game = Game
   { _score :: Int,
     _board :: Figure,
     _figures :: Array Int (Maybe (Selectable Figure)),
-    _state :: State,
+    _state :: GameState,
     _turnNumber :: Int,
     _autoPlay :: Bool }
   deriving stock (Show)
@@ -324,9 +335,9 @@ rotateFigureClockwise f =
 
 randomRawFigure :: IO Figure
 randomRawFigure = do
-  figureIndex <- uniformRM (0, length possibleFigures - 1) globalStdGen
+  ix <- uniformRM (0, length possibleFigures - 1) globalStdGen
   rotations <- uniformRM (0 :: Int, 3) globalStdGen
-  let figure = possibleFigures !! figureIndex
+  let figure = possibleFigures !! ix
   return $ iterate rotateFigureClockwise figure !! rotations
 
 ---
@@ -343,15 +354,20 @@ initGame = do
   let _board =
         array ((0, 0), (boardSize - 1, boardSize - 1))
           [((i, j), Free) | i <- [0 .. boardSize - 1], j <- [0 .. boardSize - 1]]
-  selectedFirstFigure <- randomSelectableFigures
+  figuresWithFirstSelected <- randomSelectableFigures
   let game = Game
         { _score = 0,
           _board = _board,
-          _figures = selectedFirstFigure,
-          _state = SelectingFigure,
+          _figures = figuresWithFirstSelected,
+          _state = SelectingFigure $ FigureInSelection (selected figuresWithFirstSelected) 0,
           _turnNumber = 1,
           _autoPlay = False }
-  return game
+  return game where
+    selected figs =
+      case figs ! 0 of
+        Just (Selected f) -> f
+        Just (NotSelected f) -> f
+        Nothing -> error "Cannt select first figure"
 
 rowCells :: HasCallStack => Int -> Array CellCoord a -> [a]
 rowCells rowIndex f =
@@ -374,12 +390,6 @@ selectedFigureIndex game =
     where
       isSelected (Just (Selected _)) = True
       isSelected _ = False
-
-selectedFigure :: HasCallStack => Game -> Maybe Figure
-selectedFigure game =
-  case selectedFigureIndex game >>= \i -> (game ^. figures) ! i of
-    Just (Selected f) -> Just f
-    _ -> Nothing
 
 nextFigureIndices :: Int -> [Int]
 nextFigureIndices currentFigureIndex =
@@ -518,13 +528,14 @@ actionsAccordingToProbability = concatMap (\(action, game) -> replicate (userAct
 
 randomElement :: [a] -> IO a
 randomElement list = do
+  -- store RNG in the Game, use randomR
   randomIndex <- randomRIO (0, length list - 1)
   pure $ list !! randomIndex
 
 possibleActionsImpl :: HasCallStack => Game -> Bool -> IO [(Action, Game)]
 possibleActionsImpl game generateAutoPlay = do
   case game ^. state of
-    SelectingFigure -> actions where
+    SelectingFigure figure -> actions where
       actions = do
         newGame <- restartGameAction
         autoPlayTurn <- nextAutoPlayTurnAction game generateAutoPlay
@@ -545,22 +556,23 @@ possibleActionsImpl game generateAutoPlay = do
         pure (action, game')
 
       startPlacing = do
-        selectedFigure_ <- selectedFigure game
-        let game' = game & state .~ PlacingFigure selectedFigure_ zeroCoord
+        let game' = game & state .~ PlacingFigure figure zeroCoord
         pure (UserAction StartPlacingFigure, game')
 
     PlacingFigure fig coord -> actions where
       board_ = game ^. board
+      
+      figureItself = fig ^. figureInSelection
 
       tryMove :: Coord -> Action -> Maybe (Action, Game)
       tryMove movement action = do
-        newCoord <- tryMoveFigure board_ fig coord movement
+        newCoord <- tryMoveFigure board_ figureItself coord movement
         let game' = game & state .~ PlacingFigure fig newCoord
         pure (action, game')
 
       place :: HasCallStack => IO (Maybe (Action, Game))
       place = do
-        case tryPlaceFigure fig coord board_ of
+        case tryPlaceFigure figureItself coord board_ of
           Nothing -> pure Nothing
           Just newBoard -> do
             let newFigures = game ^. figures & fmap markSelectedAsPlaced
@@ -570,7 +582,7 @@ possibleActionsImpl game generateAutoPlay = do
               else
                 pure (selectFirstSelectableFigure newFigures, 0)
             let g' =
-                  state .~ SelectingFigure
+                  state .~ SelectingFigure fig
                   $ figures .~ newFigures2
                   $ board .~ removeFilledRanges newBoard
                   $ turnNumber +~ turnIncrement
@@ -591,7 +603,7 @@ possibleActionsImpl game generateAutoPlay = do
             newGame,
             toggleAutoPlayAction game,
             autoPlayTurn,
-            Just (UserAction CancelPlacingFigure, game & state .~ SelectingFigure)
+            Just (UserAction CancelPlacingFigure, game & state .~ SelectingFigure fig)
           ]
     GameOver -> do
       newGame <- restartGameAction

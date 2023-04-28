@@ -454,8 +454,7 @@ removeFilledRanges fig =
 possibleFigureStartCoordinates :: Figure -> [Coord]
 possibleFigureStartCoordinates fig =
   [Coord { _x = x, _y = y } | x <- [0 .. boardSize - figureWidth - 1], y <- [0 .. boardSize - figureHeight - 1]] where
-    figureBounds = snd $ bounds fig
-    (figureWidth, figureHeight) = figureBounds
+    (figureHeight, figureWidth) = snd $ bounds fig
 
 canBePlacedToBoardAtSomePoint :: HasCallStack => Figure -> Figure -> Bool
 canBePlacedToBoardAtSomePoint fig b =

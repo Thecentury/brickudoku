@@ -28,7 +28,7 @@ module Blockudoku
     possibleActions ) where
 
 import Control.Lens ( (&), makeLenses, (^.), (%~), (.~), (+~) )
-import Data.Array ( (//), array, bounds, Array, assocs, listArray )
+import Data.Array ( (//), array, bounds, Array, assocs, listArray, elems )
 import System.Random.Stateful ( globalStdGen, UniformRange(uniformRM) )
 import Control.Monad (replicateM, join)
 import Data.List (find)
@@ -54,8 +54,8 @@ data PlacingCell =
   PlacingCannotPlace
   deriving stock (Show, Eq)
 
-allPlaced :: (Foldable m) => m (Maybe a) -> Bool
-allPlaced = foldl (\soFar item -> soFar && isNothing item) True
+allPlaced :: [Maybe a] -> Bool
+allPlaced = all isNothing
 
 --- Coordinates
 
@@ -369,15 +369,15 @@ previousFigureIndices :: FigureIndex -> [FigureIndex]
 previousFigureIndices currentFigureIndex =
   map (`rem` figuresToPlaceCount) [figuresToPlaceCount + currentFigureIndex - 1, figuresToPlaceCount + currentFigureIndex - 2]
 
-tryFindNextFigureToSelect :: HasCallStack => Game -> FigureInSelection -> (FigureIndex -> [FigureIndex]) -> Maybe FigureInSelection
-tryFindNextFigureToSelect g selectedFig nextIndices =
+tryFindNextFigureToSelect :: HasCallStack => Figure -> Array FigureIndex (Maybe FigureInSelection) -> [FigureIndex] -> Maybe FigureInSelection
+tryFindNextFigureToSelect b figs nextIndices =
   join $ find canBeSelected nexts where
     canBeSelected :: Maybe FigureInSelection -> Bool
     canBeSelected Nothing = False
-    canBeSelected (Just f) = canBePlacedToBoardAtSomePoint (f ^. figureInSelection) $ g ^. board
+    canBeSelected (Just f) = canBePlacedToBoardAtSomePoint (f ^. figureInSelection) b
 
     nexts :: [Maybe FigureInSelection]
-    nexts = map (\i -> (g ^. figures) ! i) $ nextIndices $ selectedFig ^. figureIndex
+    nexts = (figs !) <$> nextIndices
 
 ----
 
@@ -500,8 +500,10 @@ possibleActionsImpl game generateAutoPlay = do
             autoPlayTurn
           ]
 
-      moveFigure action nextIndices = do
-        nextFigure <- tryFindNextFigureToSelect game figure nextIndices
+      moveFigure :: Action -> (FigureIndex -> [FigureIndex]) -> Maybe (Action, Game)
+      moveFigure action calculateNextIndices = do
+        let nextIndices = calculateNextIndices $ figure ^. figureIndex
+        nextFigure <- tryFindNextFigureToSelect (game ^. board) (game ^. figures) nextIndices
         let game' = game & state .~ SelectingFigure nextFigure
         pure (action, game')
 
@@ -525,25 +527,26 @@ possibleActionsImpl game generateAutoPlay = do
           Nothing -> pure Nothing
           Just newBoard -> do
             let figuresWithSelectedPlaced = markFigureAsPlaced figure $ game ^. figures
-            (newFigures, turnIncrement, currentIndex) <-
-              if allPlaced figuresWithSelectedPlaced then
-                fmap (, 1, figuresToPlaceCount - 1) $ fmap Just <$> randomFigures
+            (newFigures, turnIncrement, nextIndices) <-
+              if allPlaced $ elems figuresWithSelectedPlaced then
+                fmap (, 1, [0 .. figuresToPlaceCount - 1]) $ fmap Just <$> randomFigures
               else
-                pure (figuresWithSelectedPlaced, 0, figure ^. figureIndex)
-            let maybeNextFig = tryFindNextFigureToSelect game figure $ const $ nextFigureIndices currentIndex
-            case maybeNextFig of
-              Just nextFig -> do
-                let game' =
-                      state .~ SelectingFigure nextFig
-                      $ figures .~ newFigures
-                      $ board .~ removeFilledRanges newBoard
-                      $ turnNumber +~ turnIncrement
-                      $ game
-                pure $ Just (UserAction PlaceFigure, game')
+                pure (figuresWithSelectedPlaced, 0, nextFigureIndices $ figure ^. figureIndex)
+            let game' =
+                  figures .~ newFigures
+                  $ board .~ removeFilledRanges newBoard
+                  $ turnNumber +~ turnIncrement
+                  $ game
+            let maybeNextFig = tryFindNextFigureToSelect (game' ^. board) newFigures nextIndices
+            pure $ case maybeNextFig of
+              Just nextFig ->
+                let game'' = state .~ SelectingFigure nextFig $ game' in
+                Just (UserAction PlaceFigure, game'')
               Nothing ->
-                pure $ Just (UserAction PlaceFigure, state .~ GameOver $ game)
+                let game'' = state .~ GameOver $ game' in
+                Just (UserAction PlaceFigure, game'')
 
-      actions :: IO [(Action, Game)]
+      actions :: HasCallStack => IO [(Action, Game)]
       actions = do
         placeAction <- placeFigureAction
         newGame <- restartGameAction

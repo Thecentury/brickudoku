@@ -27,14 +27,14 @@ module Blockudoku
     possibleActions ) where
 
 import Control.Lens ( (&), makeLenses, (^.), (%~), (.~), (+~) )
-import Data.Array ( (!), (//), array, bounds, Array, elems, assocs, listArray )
+import Data.Array ( (//), array, bounds, Array, elems, assocs, listArray )
 import System.Random.Stateful ( globalStdGen, UniformRange(uniformRM) )
 import Control.Monad (replicateM)
 import Data.List (findIndex, find)
 import qualified Data.List as List
 import Data.Maybe (mapMaybe, isJust, isNothing, catMaybes)
 
-import MyPrelude ( mapArrayItem, mapiArray )
+import MyPrelude ( mapArrayItem, mapiArray, (!) )
 import qualified Data.Bifunctor
 import System.Random (randomRIO)
 
@@ -103,6 +103,7 @@ addVector (Coord x y) (Vector dx dy) = Coord (x + dx) (y + dy)
 
 ---
 
+-- todo use some V2 type from other brick applications?
 type CellCoord = (Int, Int)
 
 row :: CellCoord -> Int
@@ -146,7 +147,7 @@ boardToPlacingCells board =
   & map (Data.Bifunctor.second boardCellToPlacingCell)
   & array (bounds board)
 
-tryPlaceFigure :: Figure -> Coord -> Figure -> Maybe Figure
+tryPlaceFigure :: HasCallStack => Figure -> Coord -> Figure -> Maybe Figure
 tryPlaceFigure figure figureCoord board =
   let
     figureCells =
@@ -166,7 +167,7 @@ tryPlaceFigure figure figureCoord board =
         Free -> tryPlace (b // [(coord, Filled)]) coords
         Filled -> Nothing
 
-addPlacingFigure :: Figure -> Coord -> Figure -> PlacingCellsFigure
+addPlacingFigure :: HasCallStack => Figure -> Coord -> Figure -> PlacingCellsFigure
 addPlacingFigure figure figureCoord board =
   placingBoard // figureCells
   where
@@ -317,7 +318,7 @@ possibleFigures = map mkFigure possibleFiguresData
 emptyFigure :: Figure
 emptyFigure = mkFigure [[0]]
 
-rotateFigureClockwise :: Figure -> Figure
+rotateFigureClockwise :: HasCallStack => Figure -> Figure
 rotateFigureClockwise f =
   array ((0, 0), (newHeight - 1, newWidth - 1)) [((c, figureHeight - 1 - r), f ! (r, c)) | r <- [0 .. figureHeight - 1], c <- [0 .. figureWidth - 1]]
     where
@@ -358,7 +359,7 @@ initGame = do
           _autoPlay = False }
   return game
 
-rowCells :: Int -> Array CellCoord a -> [a]
+rowCells :: HasCallStack => Int -> Array CellCoord a -> [a]
 rowCells rowIndex f =
   [f ! (rowIndex, c) | c <- [0 .. figureWidth - 1]]
     where
@@ -380,7 +381,7 @@ selectedFigureIndex game =
       isSelected (Just (Selected _)) = True
       isSelected _ = False
 
-selectedFigure :: Game -> Maybe Figure
+selectedFigure :: HasCallStack => Game -> Maybe Figure
 selectedFigure game =
   case selectedFigureIndex game >>= \i -> (game ^. figures) ! i of
     Just (Selected f) -> Just f
@@ -394,7 +395,7 @@ previousFigureIndices :: Int -> [Int]
 previousFigureIndices currentFigureIndex =
   map (`rem` figuresToPlaceCount) [figuresToPlaceCount + currentFigureIndex - 1, figuresToPlaceCount + currentFigureIndex - 2]
 
-tryFindNextFigureToSelect :: Game -> (Int -> [Int]) -> Maybe Int
+tryFindNextFigureToSelect :: HasCallStack => Game -> (Int -> [Int]) -> Maybe Int
 tryFindNextFigureToSelect g nextIndices = do
   currentIndex <- selectedFigureIndex g
   let nexts = map (\i -> (i, (g ^. figures) ! i)) $ nextIndices currentIndex
@@ -406,7 +407,7 @@ tryFindNextFigureToSelect g nextIndices = do
     canBeSelected (Just (NotSelected f)) = canBePlacedToBoardAtSomePoint f $ g ^. board
 
 -- todo not all figures may be selectable
-selectFirstSelectableFigure :: Array Int (Maybe (Selectable a)) -> Array Int (Maybe (Selectable a))
+selectFirstSelectableFigure :: HasCallStack => Array Int (Maybe (Selectable a)) -> Array Int (Maybe (Selectable a))
 selectFirstSelectableFigure figs =
   go 0
   where
@@ -431,7 +432,7 @@ freeAllCells fig coords =
   fig // fmap (, Free) coords
 
 -- | Determines whether all cells by specified coordinates are filled
-allCellsAreFilled :: Figure -> [CellCoord] -> Bool
+allCellsAreFilled :: HasCallStack => Figure -> [CellCoord] -> Bool
 allCellsAreFilled fig coords =
   coords & fmap (fig !) & all (== Filled)
 
@@ -456,7 +457,7 @@ possibleFigureStartCoordinates fig =
     figureBounds = snd $ bounds fig
     (figureWidth, figureHeight) = figureBounds
 
-canBePlacedToBoardAtSomePoint :: Figure -> Figure -> Bool
+canBePlacedToBoardAtSomePoint :: HasCallStack => Figure -> Figure -> Bool
 canBePlacedToBoardAtSomePoint fig b =
   List.any (\coord -> tryPlaceFigure fig coord b & isJust) starts where
     starts = possibleFigureStartCoordinates fig
@@ -527,7 +528,7 @@ randomElement list = do
   randomIndex <- randomRIO (0, length list - 1)
   pure $ list !! randomIndex
 
-possibleActionsImpl :: Game -> Bool -> IO [(Action, Game)]
+possibleActionsImpl :: HasCallStack => Game -> Bool -> IO [(Action, Game)]
 possibleActionsImpl game generateAutoPlay = do
   case game ^. state of
     SelectingFigure -> actions where
@@ -564,7 +565,7 @@ possibleActionsImpl game generateAutoPlay = do
         let game' = game & state .~ PlacingFigure fig newCoord
         pure (action, game')
 
-      place :: IO (Maybe (Action, Game))
+      place :: HasCallStack => IO (Maybe (Action, Game))
       place = do
         case tryPlaceFigure fig coord board_ of
           Nothing -> pure Nothing

@@ -33,7 +33,7 @@ import Control.Monad (replicateM)
 import Data.List (findIndex, find)
 import qualified Data.List as List
 import Data.Maybe (mapMaybe, isJust, isNothing, catMaybes)
-
+import Linear.V2 (V2(..), _x, _y)
 import MyPrelude ( mapArrayItem, mapiArray, (!) )
 import qualified Data.Bifunctor
 import System.Random (randomRIO)
@@ -78,29 +78,22 @@ allPlaced = foldl (\soFar item -> soFar && isNothing item) True
 
 --- Coordinates
 
-data Coord = Coord { _x :: Int, _y :: Int }
-  deriving stock (Show, Eq)
+type Coord = V2 Int
 
 zeroCoord :: Coord
-zeroCoord = Coord { _x = 0, _y = 0 }
+zeroCoord = V2 0 0
 
-data Vector = Vector { _dx :: Int, _dy :: Int }
-  deriving stock (Show, Eq)
+vectorUp :: Coord
+vectorUp = V2 0 (-1)
 
-vectorUp :: Vector
-vectorUp = Vector { _dx = 0, _dy = -1 }
+vectorDown :: Coord
+vectorDown = V2 0 1
 
-vectorDown :: Vector
-vectorDown = Vector { _dx = 0, _dy = 1 }
+vectorLeft :: Coord
+vectorLeft = V2 (-1) 0
 
-vectorLeft :: Vector
-vectorLeft = Vector { _dx = -1, _dy = 0 }
-
-vectorRight :: Vector
-vectorRight = Vector { _dx = 1, _dy = 0 } 
-
-addVector :: Coord -> Vector -> Coord
-addVector (Coord x y) (Vector dx dy) = Coord (x + dx) (y + dy)
+vectorRight :: Coord
+vectorRight = V2 1 0 
 
 ---
 
@@ -117,20 +110,20 @@ type Figure = Array CellCoord Cell
 
 type PlacingCellsFigure = Array CellCoord PlacingCell
 
-tryMoveFigure :: Figure -> Figure -> Coord -> Vector -> Maybe Coord
+tryMoveFigure :: Figure -> Figure -> Coord -> Coord -> Maybe Coord
 tryMoveFigure board figure coord vector =
   let
-    newCoord = addVector coord vector
+    newCoord = coord + vector
     figureSize = snd $ bounds figure
     boardBounds = bounds board
     boardTopLeft = fst boardBounds
     boardBottomRight = snd boardBounds
     topLeftWithinBoard =
-      newCoord._x >= col boardTopLeft &&
-      newCoord._y >= row boardTopLeft
+      newCoord ^. _x >= col boardTopLeft &&
+      newCoord ^. _y >= row boardTopLeft
     bottomRightWithinBoard =
-      newCoord._x + col figureSize <= col boardBottomRight &&
-      newCoord._y + row figureSize <= row boardBottomRight
+      newCoord ^. _x + col figureSize <= col boardBottomRight &&
+      newCoord ^. _y + row figureSize <= row boardBottomRight
   in
     if topLeftWithinBoard && bottomRightWithinBoard then
       Just newCoord
@@ -159,7 +152,7 @@ tryPlaceFigure figure figureCoord board =
     tryPlace board figureCells
   where
     newCoord :: CellCoord -> CellCoord
-    newCoord (r, c) = (r + figureCoord._y, c + figureCoord._x)
+    newCoord (r, c) = (r + figureCoord^._y, c + figureCoord^._x)
 
     tryPlace :: Figure -> [CellCoord] -> Maybe Figure
     tryPlace b [] = Just b
@@ -180,7 +173,7 @@ addPlacingFigure figure figureCoord board =
       & map (\(coord, cell) -> (newCoord coord, figureCell (newCoord coord) cell))
 
     newCoord :: CellCoord -> CellCoord
-    newCoord (r, c) = (r + figureCoord._y, c + figureCoord._x)
+    newCoord (r, c) = (r + figureCoord^._y, c + figureCoord^._x)
 
     canPlaceFullFigure =
       figure
@@ -454,7 +447,7 @@ removeFilledRanges fig =
 
 possibleFigureStartCoordinates :: Figure -> [Coord]
 possibleFigureStartCoordinates fig =
-  [Coord { _x = x, _y = y } | x <- [0 .. boardSize - figureWidth - 1], y <- [0 .. boardSize - figureHeight - 1]] where
+  [V2 x y | x <- [0 .. boardSize - figureWidth - 1], y <- [0 .. boardSize - figureHeight - 1]] where
     (figureHeight, figureWidth) = snd $ bounds fig
 
 canBePlacedToBoardAtSomePoint :: HasCallStack => Figure -> Figure -> Bool
@@ -559,7 +552,7 @@ possibleActionsImpl game generateAutoPlay = do
     PlacingFigure fig coord -> actions where
       board_ = game ^. board
 
-      tryMove :: Vector -> Action -> Maybe (Action, Game)
+      tryMove :: Coord -> Action -> Maybe (Action, Game)
       tryMove movement action = do
         newCoord <- tryMoveFigure board_ fig coord movement
         let game' = game & state .~ PlacingFigure fig newCoord

@@ -37,6 +37,7 @@ import Data.Maybe (mapMaybe, isJust, isNothing, catMaybes)
 import MyPrelude ( mapArrayItem, mapiArray, (!) )
 import qualified Data.Bifunctor
 import System.Random (randomRIO)
+import GHC.Stack (HasCallStack)
 
 ----
 

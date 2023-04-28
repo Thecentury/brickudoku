@@ -10,9 +10,9 @@ import GHC.Stack (HasCallStack)
 arrayItem :: HasCallStack => (Show i, Ix i) => Array i a -> i -> a
 arrayItem a i = 
   if Array.inRange (bounds a) i then
-    error $ "Index " ++ show i ++ " out of bounds [" ++ show minIndex ++ ", " ++ show maxIndex ++ "]"
-  else
     a Array.! i
+  else
+    error $ "Index " ++ show i ++ " out of bounds [" ++ show minIndex ++ ", " ++ show maxIndex ++ "]"
   where
     (minIndex, maxIndex) = bounds a
 

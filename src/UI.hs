@@ -19,13 +19,12 @@ import Blockudoku
       board,
       figuresToPlace,
       score,
-      -- todo remove
-      state,
       turnNumber,
       emptyFigure,
       initGame,
       figureRows,
       possibleActions,
+      isGameOver,
       GameEvent (..),
       figureInSelection,
       FigureInSelection )
@@ -113,16 +112,25 @@ drawUI game =
       $ withBorderStyle BS.unicodeRounded
       $ B.border
       $ hBox
-      $ map (vLimit 6 . C.vCenter . drawFigureToPlace) $ figuresToPlace game
+      $ map (vLimit 6 . C.vCenter . drawFigureToPlace) 
+      $ figuresToPlace game
     applyGameOverPalette widget =
-      case game ^. state of
-        GameOver -> updateAttrMap (A.applyAttrMappings gameOverMap) widget
-        _ -> widget
+      if isGameOver game then
+        updateAttrMap (A.applyAttrMappings gameOverMap) widget
+      else
+        widget
     gameOverWidget = 
-      case game ^. state of
-        GameOver ->
-          C.centerLayer $ withAttr gameOverAttr $ withBorderStyle BS.unicodeRounded $ B.border $ hLimit 15 $ vLimit 5 $ C.center $ str "Game over"
-        _ -> emptyWidget
+      if isGameOver game then
+        C.centerLayer 
+        $ withAttr gameOverAttr 
+        $ withBorderStyle BS.unicodeRounded 
+        $ B.border 
+        $ hLimit 15 
+        $ vLimit 5 
+        $ C.center 
+        $ str "Game over"
+      else
+         emptyWidget
 
 drawScore :: Game -> Widget Name
 drawScore game =

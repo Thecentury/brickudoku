@@ -15,6 +15,7 @@ module Blockudoku
     FigureToPlaceKind(..),
     figureInSelection,
     cellsToDisplay,
+    isGameOver,
     UserAction(..),
     SystemAction(..),
     Action(..),
@@ -22,7 +23,6 @@ module Blockudoku
     figuresToPlace,
     board,
     score,
-    state,
     turnNumber,
     emptyFigure,
     initGame,
@@ -223,6 +223,11 @@ data Game = Game
   deriving stock (Show)
 
 makeLenses ''Game
+
+isGameOver :: Game -> Bool
+isGameOver game = case game ^. state of
+  GameOver -> True
+  _ -> False
 
 cellsToDisplay :: Game -> PlacingCellsFigure
 cellsToDisplay game = case game ^. Blockudoku.state of

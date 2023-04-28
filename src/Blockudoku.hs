@@ -7,7 +7,6 @@ module Blockudoku
     GameState(PlacingFigure, SelectingFigure),
     Figure,
     CellCoord,
-    Selectable(..),
     PlacingCell(..),
     Cell(..),
     FigureInSelection,
@@ -29,14 +28,14 @@ module Blockudoku
     possibleActions ) where
 
 import Control.Lens ( (&), makeLenses, (^.), (%~), (.~), (+~) )
-import Data.Array ( (//), array, bounds, Array, elems, assocs, listArray )
+import Data.Array ( (//), array, bounds, Array, assocs, listArray )
 import System.Random.Stateful ( globalStdGen, UniformRange(uniformRM) )
-import Control.Monad (replicateM)
-import Data.List (findIndex, find)
+import Control.Monad (replicateM, join)
+import Data.List (find)
 import qualified Data.List as List
 import Data.Maybe (mapMaybe, isJust, isNothing, catMaybes)
 import Linear.V2 (V2(..), _x, _y)
-import MyPrelude ( mapArrayItem, mapiArray, (!) )
+import MyPrelude ( mapiArray, (!) )
 import qualified Data.Bifunctor
 import System.Random (randomRIO)
 import GHC.Stack (HasCallStack)
@@ -54,26 +53,6 @@ data PlacingCell =
   PlacingCanPlaceButNotFullFigure |
   PlacingCannotPlace
   deriving stock (Show, Eq)
-
-data Selectable a =
-  Selected a |
-  NotSelected a
-  deriving stock (Show, Eq)
-
-select :: Maybe (Selectable a) -> Maybe (Selectable a)
-select (Just (Selected a)) = Just $ Selected a
-select (Just (NotSelected a)) = Just $ Selected a
-select Nothing = Nothing
-
-deselect :: Maybe (Selectable a) -> Maybe (Selectable a)
-deselect (Just (Selected a)) = Just $ NotSelected a
-deselect (Just (NotSelected a)) = Just $ NotSelected a
-deselect Nothing = Nothing
-
-markSelectedAsPlaced :: Maybe (Selectable a) -> Maybe (Selectable a)
-markSelectedAsPlaced (Just (Selected _)) = Nothing
-markSelectedAsPlaced (Just (NotSelected a)) = Just $ NotSelected a
-markSelectedAsPlaced Nothing = Nothing
 
 allPlaced :: (Foldable m) => m (Maybe a) -> Bool
 allPlaced = foldl (\soFar item -> soFar && isNothing item) True
@@ -214,7 +193,7 @@ data GameEvent = Tick
 data Game = Game
   { _score :: Int,
     _board :: Figure,
-    _figures :: Array Int (Maybe (Selectable Figure)),
+    _figures :: Array Int (Maybe FigureInSelection),
     _state :: GameState,
     _turnNumber :: Int,
     _autoPlay :: Bool }
@@ -342,32 +321,26 @@ randomRawFigure = do
 
 ---
 
-randomSelectableFigures :: IO (Array Int (Maybe (Selectable Figure)))
-randomSelectableFigures = do
+randomFigures :: IO (Array Int FigureInSelection)
+randomFigures = do
   rawFigures <- replicateM figuresToPlaceCount randomRawFigure
-  let selectableFigures = listArray (0, figuresToPlaceCount - 1) $ map (Just . NotSelected) rawFigures
-  -- Select first figure
-  pure $ mapArrayItem 0 select selectableFigures
+  pure $ mapiArray (flip FigureInSelection) $ listArray (0, figuresToPlaceCount - 1) rawFigures
 
 initGame :: IO Game
 initGame = do
   let _board =
         array ((0, 0), (boardSize - 1, boardSize - 1))
           [((i, j), Free) | i <- [0 .. boardSize - 1], j <- [0 .. boardSize - 1]]
-  figuresWithFirstSelected <- randomSelectableFigures
+  boardFigures <- randomFigures
+  let justFigures = Just <$> boardFigures
   let game = Game
         { _score = 0,
           _board = _board,
-          _figures = figuresWithFirstSelected,
-          _state = SelectingFigure $ FigureInSelection (selected figuresWithFirstSelected) 0,
+          _figures = justFigures,
+          _state = SelectingFigure $ boardFigures ! 0,
           _turnNumber = 1,
           _autoPlay = False }
-  return game where
-    selected figs =
-      case figs ! 0 of
-        Just (Selected f) -> f
-        Just (NotSelected f) -> f
-        Nothing -> error "Cannt select first figure"
+  return game
 
 rowCells :: HasCallStack => Int -> Array CellCoord a -> [a]
 rowCells rowIndex f =
@@ -384,49 +357,23 @@ figureRows f = map (`rowCells` f) rowIndices where
 
 --- Event handling ---
 
-selectedFigureIndex :: Game -> Maybe Int
-selectedFigureIndex game =
-  game ^. figures & elems & findIndex isSelected
-    where
-      isSelected (Just (Selected _)) = True
-      isSelected _ = False
-
-nextFigureIndices :: Int -> [Int]
+nextFigureIndices :: FigureIndex -> [FigureIndex]
 nextFigureIndices currentFigureIndex =
   map (`rem` figuresToPlaceCount) [currentFigureIndex + 1, currentFigureIndex + 2]
 
-previousFigureIndices :: Int -> [Int]
+previousFigureIndices :: FigureIndex -> [FigureIndex]
 previousFigureIndices currentFigureIndex =
   map (`rem` figuresToPlaceCount) [figuresToPlaceCount + currentFigureIndex - 1, figuresToPlaceCount + currentFigureIndex - 2]
 
-tryFindNextFigureToSelect :: HasCallStack => Game -> (Int -> [Int]) -> Maybe Int
-tryFindNextFigureToSelect g nextIndices = do
-  currentIndex <- selectedFigureIndex g
-  let nexts = map (\i -> (i, (g ^. figures) ! i)) $ nextIndices currentIndex
-  fst <$> find (\(_, f) -> canBeSelected f) nexts
-  where
-    canBeSelected :: Maybe (Selectable Figure) -> Bool
+tryFindNextFigureToSelect :: HasCallStack => Game -> FigureInSelection -> (FigureIndex -> [FigureIndex]) -> Maybe FigureInSelection
+tryFindNextFigureToSelect g selectedFig nextIndices =
+  join $ find canBeSelected nexts where
+    canBeSelected :: Maybe FigureInSelection -> Bool
     canBeSelected Nothing = False
-    canBeSelected (Just (Selected _)) = False
-    canBeSelected (Just (NotSelected f)) = canBePlacedToBoardAtSomePoint f $ g ^. board
+    canBeSelected (Just f) = canBePlacedToBoardAtSomePoint (f ^. figureInSelection) $ g ^. board
 
--- todo not all figures may be selectable
-selectFirstSelectableFigure :: HasCallStack => Array Int (Maybe (Selectable a)) -> Array Int (Maybe (Selectable a))
-selectFirstSelectableFigure figs =
-  go 0
-  where
-    next index f =
-      let (_, maxIndex) = bounds figs
-      in if index < maxIndex then
-        f (index + 1)
-      else
-        figs
-
-    go index =
-      case figs ! index of
-        Nothing -> next index go
-        Just (Selected _) -> figs
-        Just (NotSelected a) -> figs // [(index, Just (Selected a))]
+    nexts :: [Maybe FigureInSelection]
+    nexts = map (\i -> (g ^. figures) ! i) $ nextIndices $ selectedFig ^. figureIndex
 
 ----
 
@@ -548,11 +495,10 @@ possibleActionsImpl game generateAutoPlay = do
             toggleAutoPlayAction game,
             autoPlayTurn
           ]
-      setSelected indexToSelect = mapiArray (\i x -> if i == indexToSelect then select x else deselect x)
 
       moveFigure action nextIndices = do
-        nextIx <- tryFindNextFigureToSelect game nextIndices
-        let game' = game & figures %~ setSelected nextIx
+        nextFigure <- tryFindNextFigureToSelect game figure nextIndices
+        let game' = game & state .~ SelectingFigure nextFigure
         pure (action, game')
 
       startPlacing = do
@@ -561,7 +507,6 @@ possibleActionsImpl game generateAutoPlay = do
 
     PlacingFigure fig coord -> actions where
       board_ = game ^. board
-      
       figureItself = fig ^. figureInSelection
 
       tryMove :: Coord -> Action -> Maybe (Action, Game)
@@ -575,19 +520,25 @@ possibleActionsImpl game generateAutoPlay = do
         case tryPlaceFigure figureItself coord board_ of
           Nothing -> pure Nothing
           Just newBoard -> do
-            let newFigures = game ^. figures & fmap markSelectedAsPlaced
-            (newFigures2, turnIncrement) <-
+            -- Mark the current figure as placed
+            let newFigures = (game ^. figures) // [(fig ^. figureIndex, Nothing)]
+            (newFigures2, turnIncrement, currentIndex) <-
               if allPlaced newFigures then
-                fmap (, 1) randomSelectableFigures
+                fmap (, 1, figuresToPlaceCount - 1) $ fmap Just <$> randomFigures
               else
-                pure (selectFirstSelectableFigure newFigures, 0)
-            let g' =
-                  state .~ SelectingFigure fig
-                  $ figures .~ newFigures2
-                  $ board .~ removeFilledRanges newBoard
-                  $ turnNumber +~ turnIncrement
-                  $ game
-            pure $ Just (UserAction PlaceFigure, g')
+                pure (newFigures, 0, fig ^. figureIndex)
+            let nextFig = tryFindNextFigureToSelect game fig $ const $ nextFigureIndices currentIndex
+            case nextFig of
+              Just nextFig_ -> do
+                let g' =
+                      state .~ SelectingFigure nextFig_
+                      $ figures .~ newFigures2
+                      $ board .~ removeFilledRanges newBoard
+                      $ turnNumber +~ turnIncrement
+                      $ game
+                pure $ Just (UserAction PlaceFigure, g')
+              Nothing ->
+                pure $ Just (UserAction PlaceFigure, state .~ GameOver $ game)
 
       actions :: IO [(Action, Game)]
       actions = do

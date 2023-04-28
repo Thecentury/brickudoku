@@ -8,7 +8,6 @@ import Blockudoku
       GameState(PlacingFigure, SelectingFigure),
       Figure,
       CellCoord,
-      Selectable(..),
       PlacingCell(..),
       Cell(..),
       boardToPlacingCells,
@@ -26,7 +25,7 @@ import Blockudoku
       figureRows,
       possibleActions,
       GameEvent (..),
-      figureInSelection )
+      figureInSelection, FigureInSelection )
 
 import Control.Monad.State.Strict
     ( MonadIO(liftIO), MonadState(put, get) )
@@ -167,11 +166,11 @@ drawSomeFigureToPlace mapping borderStyle drawOneCell figure =
  $ C.center
  $ drawFigure drawOneCell figure
 
-drawFigureToPlace :: GameState -> Maybe (Selectable Figure) -> Widget Name
+drawFigureToPlace :: GameState -> Maybe FigureInSelection -> Widget Name
 drawFigureToPlace _ Nothing = drawSomeFigureToPlace notSelectedFigureBorderMappings BS.unicodeRounded (\_ -> withAttr emptyCellAttr $ str "  ") emptyFigure
-drawFigureToPlace (SelectingFigure _) (Just (Selected figure)) = drawSomeFigureToPlace selectedFigureBorderMappings BS.unicodeBold drawCell figure
-drawFigureToPlace _ (Just (Selected figure)) = drawSomeFigureToPlace selectedPlacingFigureBorderMappings BS.unicodeRounded drawCell figure
-drawFigureToPlace _ (Just (NotSelected figure)) = drawSomeFigureToPlace notSelectedFigureBorderMappings BS.unicodeRounded drawCell figure
+drawFigureToPlace (SelectingFigure selected) (Just figure) | selected == figure = drawSomeFigureToPlace selectedFigureBorderMappings BS.unicodeBold drawCell $ figure ^. figureInSelection
+drawFigureToPlace (PlacingFigure selected _) (Just figure) | selected == figure = drawSomeFigureToPlace selectedPlacingFigureBorderMappings BS.unicodeBold drawCell $ figure ^. figureInSelection
+drawFigureToPlace _ (Just figure) = drawSomeFigureToPlace notSelectedFigureBorderMappings BS.unicodeRounded drawCell $ figure ^. figureInSelection
 
 drawCell :: Cell -> Widget Name
 drawCell Free = withAttr emptyCellAttr $ str "· "

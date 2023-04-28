@@ -14,8 +14,7 @@ module Blockudoku
     FigureToPlace(..),
     FigureToPlaceKind(..),
     figureInSelection,
-    boardToPlacingCells,
-    addPlacingFigure, -- todo review how it is used.
+    cellsToDisplay,
     UserAction(..),
     SystemAction(..),
     Action(..),
@@ -118,7 +117,6 @@ boardCellToPlacingCell :: Cell -> PlacingCell
 boardCellToPlacingCell Free = PlacingFree
 boardCellToPlacingCell Filled = PlacingFilled
 
--- todo probably hide
 boardToPlacingCells :: Figure -> Array CellCoord PlacingCell
 boardToPlacingCells board =
   board
@@ -150,7 +148,6 @@ tryPlaceFigure figure figureCoord board =
         Free -> tryPlace (b // [(coord, Filled)]) coords
         Filled -> Nothing
 
--- todo define a function returning figures for the UI
 addPlacingFigure :: HasCallStack => Figure -> Coord -> Figure -> PlacingCellsFigure
 addPlacingFigure figure figureCoord board =
   placingBoard // figureCells
@@ -226,6 +223,11 @@ data Game = Game
   deriving stock (Show)
 
 makeLenses ''Game
+
+cellsToDisplay :: Game -> PlacingCellsFigure
+cellsToDisplay game = case game ^. Blockudoku.state of
+  PlacingFigure figure coord -> addPlacingFigure (figure ^. figureInSelection) coord $ game ^. board
+  _ -> game ^. board & boardToPlacingCells
 
 figuresToPlace :: Game -> [Maybe (FigureToPlace FigureInSelection)]
 figuresToPlace game =

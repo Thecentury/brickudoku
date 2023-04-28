@@ -10,8 +10,7 @@ import Blockudoku
       CellCoord,
       PlacingCell(..),
       Cell(..),
-      boardToPlacingCells,
-      addPlacingFigure,
+      cellsToDisplay,
       UserAction(..),
       SystemAction(..),
       Action(..),
@@ -105,7 +104,7 @@ drawUI game =
     C.center (centralColumn <+> padLeft (Pad 2) (drawScore game))
   ] where
     centralColumn =
-      gameOverPalette
+      applyGameOverPalette
       $ C.hCenter (str $ "Turn: " ++ show (game ^. turnNumber))
       <=> C.hCenter (drawGrid game)
       <=> padTop (Pad 1) figuresToPlaceWidgets
@@ -115,7 +114,7 @@ drawUI game =
       $ B.border
       $ hBox
       $ map (vLimit 6 . C.vCenter . drawFigureToPlace) $ figuresToPlace game
-    gameOverPalette widget =
+    applyGameOverPalette widget =
       case game ^. state of
         GameOver -> updateAttrMap (A.applyAttrMappings gameOverMap) widget
         _ -> widget
@@ -139,11 +138,8 @@ drawGrid game =
   withBorderStyle BS.unicodeRounded
   $ B.border
   $ padAll 0
-  $ drawFigure drawPlacingCell boardToDraw
-  where
-    boardToDraw = case game ^. Blockudoku.state of
-      PlacingFigure figure coord -> addPlacingFigure (figure ^. figureInSelection) coord $ game ^. board
-      _ -> game ^. board & boardToPlacingCells
+  $ drawFigure drawPlacingCell
+  $ cellsToDisplay game
 
 filledCell :: Widget n
 filledCell = str "  "

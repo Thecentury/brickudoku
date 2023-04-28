@@ -122,6 +122,10 @@ boardToPlacingCells board =
   & map (Data.Bifunctor.second boardCellToPlacingCell)
   & array (bounds board)
 
+markFigureAsPlaced :: FigureInSelection -> Array FigureIndex (Maybe FigureInSelection) -> Array FigureIndex (Maybe FigureInSelection)
+markFigureAsPlaced figureInSelection figures =
+  figures // [(_figureIndex figureInSelection, Nothing)]
+
 tryPlaceFigure :: HasCallStack => Figure -> Coord -> Figure -> Maybe Figure
 tryPlaceFigure figure figureCoord board =
   let
@@ -505,44 +509,43 @@ possibleActionsImpl game generateAutoPlay = do
         let game' = game & state .~ PlacingFigure figure zeroCoord
         pure (UserAction StartPlacingFigure, game')
 
-    PlacingFigure fig coord -> actions where
+    PlacingFigure figure coord -> actions where
       board_ = game ^. board
-      figureItself = fig ^. figureInSelection
+      figureItself = figure ^. figureInSelection
 
       tryMove :: Coord -> Action -> Maybe (Action, Game)
       tryMove movement action = do
         newCoord <- tryMoveFigure board_ figureItself coord movement
-        let game' = game & state .~ PlacingFigure fig newCoord
+        let game' = game & state .~ PlacingFigure figure newCoord
         pure (action, game')
 
-      place :: HasCallStack => IO (Maybe (Action, Game))
-      place = do
+      placeFigureAction :: HasCallStack => IO (Maybe (Action, Game))
+      placeFigureAction = do
         case tryPlaceFigure figureItself coord board_ of
           Nothing -> pure Nothing
           Just newBoard -> do
-            -- Mark the current figure as placed
-            let newFigures = (game ^. figures) // [(fig ^. figureIndex, Nothing)]
-            (newFigures2, turnIncrement, currentIndex) <-
-              if allPlaced newFigures then
+            let figuresWithSelectedPlaced = markFigureAsPlaced figure $ game ^. figures
+            (newFigures, turnIncrement, currentIndex) <-
+              if allPlaced figuresWithSelectedPlaced then
                 fmap (, 1, figuresToPlaceCount - 1) $ fmap Just <$> randomFigures
               else
-                pure (newFigures, 0, fig ^. figureIndex)
-            let nextFig = tryFindNextFigureToSelect game fig $ const $ nextFigureIndices currentIndex
-            case nextFig of
-              Just nextFig_ -> do
-                let g' =
-                      state .~ SelectingFigure nextFig_
-                      $ figures .~ newFigures2
+                pure (figuresWithSelectedPlaced, 0, figure ^. figureIndex)
+            let maybeNextFig = tryFindNextFigureToSelect game figure $ const $ nextFigureIndices currentIndex
+            case maybeNextFig of
+              Just nextFig -> do
+                let game' =
+                      state .~ SelectingFigure nextFig
+                      $ figures .~ newFigures
                       $ board .~ removeFilledRanges newBoard
                       $ turnNumber +~ turnIncrement
                       $ game
-                pure $ Just (UserAction PlaceFigure, g')
+                pure $ Just (UserAction PlaceFigure, game')
               Nothing ->
                 pure $ Just (UserAction PlaceFigure, state .~ GameOver $ game)
 
       actions :: IO [(Action, Game)]
       actions = do
-        place' <- place
+        placeAction <- placeFigureAction
         newGame <- restartGameAction
         autoPlayTurn <- nextAutoPlayTurnAction game generateAutoPlay
         pure $ catMaybes [
@@ -550,11 +553,11 @@ possibleActionsImpl game generateAutoPlay = do
             tryMove vectorLeft $ UserAction MoveFigureLeft,
             tryMove vectorDown $ UserAction MoveFigureDown,
             tryMove vectorUp $ UserAction MoveFigureUp,
-            place',
+            placeAction,
             newGame,
             toggleAutoPlayAction game,
             autoPlayTurn,
-            Just (UserAction CancelPlacingFigure, game & state .~ SelectingFigure fig)
+            Just (UserAction CancelPlacingFigure, game & state .~ SelectingFigure figure)
           ]
     GameOver -> do
       newGame <- restartGameAction

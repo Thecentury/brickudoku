@@ -5,7 +5,7 @@ module UI (main) where
 
 import Blockudoku
     ( Game,
-      GameState(PlacingFigure, SelectingFigure),
+      GameState(..),
       Figure,
       CellCoord,
       PlacingCell(..),
@@ -25,7 +25,8 @@ import Blockudoku
       figureRows,
       possibleActions,
       GameEvent (..),
-      figureInSelection, FigureInSelection )
+      figureInSelection,
+      FigureInSelection )
 
 import Control.Monad.State.Strict
     ( MonadIO(liftIO), MonadState(put, get) )
@@ -97,15 +98,29 @@ handleEvent evt = do
 drawUI :: Game -> [Widget Name]
 drawUI game =
   [
+    gameOverWidget,
     C.center (centralColumn <+> padLeft (Pad 2) (drawScore game))
   ] where
-    centralColumn = C.hCenter (str $ "Turn: " ++ show (game ^. turnNumber)) <=> C.hCenter (drawGrid game) <=> padTop (Pad 1) figuresToPlace
+    centralColumn =
+      gameOverPalette
+      $ C.hCenter (str $ "Turn: " ++ show (game ^. turnNumber))
+      <=> C.hCenter (drawGrid game)
+      <=> padTop (Pad 1) figuresToPlace
     figuresToPlace =
       C.hCenter
       $ withBorderStyle BS.unicodeRounded
       $ B.border
       $ hBox
       $ map (vLimit 6 . C.vCenter . drawFigureToPlace (game ^. Blockudoku.state)) $ elems $ game ^. figures
+    gameOverPalette widget =
+      case game ^. state of
+        GameOver -> updateAttrMap (A.applyAttrMappings gameOverMap) widget
+        _ -> widget
+    gameOverWidget = 
+      case game ^. state of
+        GameOver ->
+          C.centerLayer $ withAttr gameOverAttr $ withBorderStyle BS.unicodeRounded $ B.border $ hLimit 15 $ vLimit 5 $ C.center $ str "Game over"
+        _ -> emptyWidget
 
 drawScore :: Game -> Widget Name
 drawScore game =
@@ -185,6 +200,9 @@ placingCanPlaceFullFigureAttr = attrName "placingCanPlaceFullFigure"
 placingCanPlaceButNotFullFigure = attrName "placingCanPlaceButNotFullFigure"
 placingCannotPlaceAttr = attrName "placingCannotPlace"
 
+gameOverAttr :: AttrName
+gameOverAttr = attrName "gameOver"
+
 theMap :: AttrMap
 theMap = attrMap V.defAttr
   [
@@ -192,7 +210,19 @@ theMap = attrMap V.defAttr
     (filledCellAttr, V.blue `on` V.blue),
     (placingCanPlaceFullFigureAttr, V.brightBlue `on` V.brightBlue),
     (placingCanPlaceButNotFullFigure, V.magenta `on` V.magenta),
-    (placingCannotPlaceAttr, V.yellow `on` V.yellow)
+    (placingCannotPlaceAttr, V.yellow `on` V.yellow),
+    (gameOverAttr, fg V.red)
+  ]
+
+gameOverMap :: [(AttrName, V.Attr)]
+gameOverMap =
+  [
+    (emptyCellAttr, V.defAttr),
+    (filledCellAttr, V.white `on` V.white),
+    (placingCanPlaceFullFigureAttr, V.white `on` V.white),
+    (placingCanPlaceButNotFullFigure, V.white `on` V.white),
+    (placingCannotPlaceAttr, V.white `on` V.white),
+    (gameOverAttr, fg V.brightRed)
   ]
 
 --- Main ---
@@ -210,7 +240,8 @@ main = do
   originalHandler <- getUncaughtExceptionHandler
   setUncaughtExceptionHandler $ handle originalHandler . lastExceptionHandler
   chan <- newBChan 10
-  let delay = 100_000 -- 100 ms
+  -- todo increase the delay (to 100 ms?)
+  let delay = 20_000 -- 20 ms
   void . forkIO $ forever $ do
     writeBChan chan Tick
     threadDelay delay

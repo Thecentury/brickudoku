@@ -4,7 +4,7 @@
 {-# LANGUAGE TupleSections #-}
 module Blockudoku
   ( Game,
-    GameState(PlacingFigure, SelectingFigure),
+    GameState(..),
     Figure,
     CellCoord,
     PlacingCell(..),

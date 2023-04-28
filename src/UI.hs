@@ -15,9 +15,12 @@ import Blockudoku
       UserAction(..),
       SystemAction(..),
       Action(..),
+      FigureToPlace(..),
+      FigureToPlaceKind(..),
       board,
-      figures,
+      figuresToPlace,
       score,
+      -- todo remove
       state,
       turnNumber,
       emptyFigure,
@@ -105,13 +108,13 @@ drawUI game =
       gameOverPalette
       $ C.hCenter (str $ "Turn: " ++ show (game ^. turnNumber))
       <=> C.hCenter (drawGrid game)
-      <=> padTop (Pad 1) figuresToPlace
-    figuresToPlace =
+      <=> padTop (Pad 1) figuresToPlaceWidgets
+    figuresToPlaceWidgets =
       C.hCenter
       $ withBorderStyle BS.unicodeRounded
       $ B.border
       $ hBox
-      $ map (vLimit 6 . C.vCenter . drawFigureToPlace (game ^. Blockudoku.state)) $ elems $ game ^. figures
+      $ map (vLimit 6 . C.vCenter . drawFigureToPlace) $ figuresToPlace game
     gameOverPalette widget =
       case game ^. state of
         GameOver -> updateAttrMap (A.applyAttrMappings gameOverMap) widget
@@ -166,9 +169,16 @@ selectedPlacingFigureBorderMappings :: [(A.AttrName, V.Attr)]
 selectedPlacingFigureBorderMappings =
     [ (B.borderAttr, fg V.brightYellow) ]
 
-notSelectedFigureBorderMappings :: [(A.AttrName, V.Attr)]
-notSelectedFigureBorderMappings =
+notSelectedCanBePlacedFigureBorderMappings :: [(A.AttrName, V.Attr)]
+notSelectedCanBePlacedFigureBorderMappings =
     [ (B.borderAttr, fg V.white) ]
+
+notSelectedCanNotBePlacedFigureBorderMappings :: [(A.AttrName, V.Attr)]
+notSelectedCanNotBePlacedFigureBorderMappings =
+    [
+      (B.borderAttr, fg V.white),
+      (filledCellAttr, V.white `on` V.white)
+    ]
 
 drawSomeFigureToPlace :: [(A.AttrName, V.Attr)] -> BS.BorderStyle -> (Cell -> Widget Name) -> Figure -> Widget Name
 drawSomeFigureToPlace mapping borderStyle drawOneCell figure =
@@ -181,11 +191,12 @@ drawSomeFigureToPlace mapping borderStyle drawOneCell figure =
  $ C.center
  $ drawFigure drawOneCell figure
 
-drawFigureToPlace :: GameState -> Maybe FigureInSelection -> Widget Name
-drawFigureToPlace _ Nothing = drawSomeFigureToPlace notSelectedFigureBorderMappings BS.unicodeRounded (\_ -> withAttr emptyCellAttr $ str "  ") emptyFigure
-drawFigureToPlace (SelectingFigure selected) (Just figure) | selected == figure = drawSomeFigureToPlace selectedFigureBorderMappings BS.unicodeBold drawCell $ figure ^. figureInSelection
-drawFigureToPlace (PlacingFigure selected _) (Just figure) | selected == figure = drawSomeFigureToPlace selectedPlacingFigureBorderMappings BS.unicodeBold drawCell $ figure ^. figureInSelection
-drawFigureToPlace _ (Just figure) = drawSomeFigureToPlace notSelectedFigureBorderMappings BS.unicodeRounded drawCell $ figure ^. figureInSelection
+drawFigureToPlace :: Maybe (FigureToPlace FigureInSelection) -> Widget Name
+drawFigureToPlace Nothing                                       = drawSomeFigureToPlace notSelectedCanBePlacedFigureBorderMappings BS.unicodeRounded (\_ -> withAttr emptyCellAttr $ str "  ") emptyFigure
+drawFigureToPlace (Just (FigureToPlace figure Selected))        = drawSomeFigureToPlace selectedFigureBorderMappings BS.unicodeBold drawCell $ figure ^. figureInSelection
+drawFigureToPlace (Just (FigureToPlace figure SelectedPlacing)) = drawSomeFigureToPlace selectedPlacingFigureBorderMappings BS.unicodeBold drawCell $ figure ^. figureInSelection
+drawFigureToPlace (Just (FigureToPlace figure CanBePlaced))     = drawSomeFigureToPlace notSelectedCanBePlacedFigureBorderMappings BS.unicodeRounded drawCell $ figure ^. figureInSelection
+drawFigureToPlace (Just (FigureToPlace figure CannotBePlaced))  = drawSomeFigureToPlace notSelectedCanNotBePlacedFigureBorderMappings BS.unicodeRounded drawCell $ figure ^. figureInSelection
 
 drawCell :: Cell -> Widget Name
 drawCell Free = withAttr emptyCellAttr $ str "· "

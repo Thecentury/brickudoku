@@ -2,6 +2,7 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE LambdaCase #-}
 module Blockudoku
   ( Game,
     GameState(..),
@@ -10,6 +11,8 @@ module Blockudoku
     PlacingCell(..),
     Cell(..),
     FigureInSelection,
+    FigureToPlace(..),
+    FigureToPlaceKind(..),
     figureInSelection,
     boardToPlacingCells,
     addPlacingFigure, -- todo review how it is used.
@@ -17,8 +20,8 @@ module Blockudoku
     SystemAction(..),
     Action(..),
     GameEvent(..),
+    figuresToPlace,
     board,
-    figures,
     score,
     state,
     turnNumber,
@@ -115,6 +118,7 @@ boardCellToPlacingCell :: Cell -> PlacingCell
 boardCellToPlacingCell Free = PlacingFree
 boardCellToPlacingCell Filled = PlacingFilled
 
+-- todo probably hide
 boardToPlacingCells :: Figure -> Array CellCoord PlacingCell
 boardToPlacingCells board =
   board
@@ -146,6 +150,7 @@ tryPlaceFigure figure figureCoord board =
         Free -> tryPlace (b // [(coord, Filled)]) coords
         Filled -> Nothing
 
+-- todo define a function returning figures for the UI
 addPlacingFigure :: HasCallStack => Figure -> Coord -> Figure -> PlacingCellsFigure
 addPlacingFigure figure figureCoord board =
   placingBoard // figureCells
@@ -177,10 +182,27 @@ addPlacingFigure figure figureCoord board =
 
 type FigureIndex = Int
 
+-- todo rename, not always relates to a selection
 data FigureInSelection = FigureInSelection
   { _figureInSelection :: Figure,
     _figureIndex :: FigureIndex }
   deriving stock (Show, Eq)
+
+data FigureToPlaceKind =
+  -- | Not selected figure that can be placed to a board
+  CanBePlaced |
+  -- | Currently selected figure
+  Selected |
+  -- | Currently selected figure in a placing mode
+  SelectedPlacing |
+  -- | Figure that cannot be placed to a board
+  CannotBePlaced
+  deriving stock (Show, Eq)
+
+data FigureToPlace a = FigureToPlace
+  { _figureToPlace :: a,
+    _figureKind :: FigureToPlaceKind }
+    deriving stock (Show, Eq)
 
 makeLenses ''FigureInSelection
 
@@ -204,6 +226,24 @@ data Game = Game
   deriving stock (Show)
 
 makeLenses ''Game
+
+figuresToPlace :: Game -> [Maybe (FigureToPlace FigureInSelection)]
+figuresToPlace game =
+  game
+  & _figures
+  & elems
+  & map (fmap (\fig -> FigureToPlace fig $ kind fig)) where
+    kind :: FigureInSelection -> FigureToPlaceKind
+    kind fig =
+      case game ^. state of
+        GameOver -> CannotBePlaced
+        SelectingFigure selectedFigure -> canBePlaced selectedFigure fig Selected
+        PlacingFigure selectedFigure _ -> canBePlaced selectedFigure fig SelectedPlacing
+    canBePlaced :: FigureInSelection -> FigureInSelection -> FigureToPlaceKind -> FigureToPlaceKind
+    canBePlaced selectedFigure fig selectedMode
+      | fig == selectedFigure = selectedMode
+      | canBePlacedToBoardAtSomePoint (fig ^. figureInSelection) (game ^. board) = CanBePlaced
+      | otherwise = CannotBePlaced      
 
 boardSize, figuresToPlaceCount :: Int
 boardSize = 9

@@ -16,7 +16,6 @@ import Blockudoku
       Action(..),
       FigureToPlace(..),
       FigureToPlaceKind(..),
-      board,
       figuresToPlace,
       score,
       turnNumber,
@@ -27,6 +26,7 @@ import Blockudoku
       isGameOver,
       isPlacingFigure,
       boardSize,
+      autoPlay,
       GameEvent (..),
       figureInSelection,
       FigureInSelection )
@@ -108,7 +108,8 @@ drawUI game =
     C.center (centralColumn <+> padLeft (Pad 2) (drawScore game))
   ] where
     centralColumn =
-      applyGameOverPalette
+      wrapWithAutoPlayBorder
+      $ applyGameOverPalette
       $ C.hCenter (str $ "Turn: " ++ show (game ^. turnNumber))
       <=> C.hCenter (withPlacingFigureBorder $ drawGrid game)
       <=> padTop (Pad 1) figuresToPlaceWidgets
@@ -142,6 +143,21 @@ drawUI game =
         updateAttrMap (A.applyAttrMappings selectedPlacingFigureBorderMappings) widget
       else  
         widget
+
+    autoPlayBorderMapping = 
+      [(B.borderAttr, fg V.brightRed)]
+
+    wrapWithAutoPlayBorder :: Widget Name -> Widget Name
+    wrapWithAutoPlayBorder widget =
+      if game ^. autoPlay then
+        updateAttrMap (A.applyAttrMappings autoPlayBorderMapping)
+        $ hLimit 60 
+        $ C.hCenter
+        $ withBorderStyle BS.unicodeRounded 
+        $ B.borderWithLabel (str " Auto-play ") 
+        $ padAll 2 widget
+      else  
+        hLimit 60 widget
 
 drawScore :: Game -> Widget Name
 drawScore game =

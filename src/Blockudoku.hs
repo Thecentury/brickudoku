@@ -22,10 +22,10 @@ module Blockudoku
     Action(..),
     GameEvent(..),
     figuresToPlace,
-    -- todo is it used?
-    board,
+    -- Lenses
     score,
     turnNumber,
+    autoPlay,
     emptyFigure,
     initGame,
     figureRows,

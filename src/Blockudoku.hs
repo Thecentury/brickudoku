@@ -91,9 +91,11 @@ col = snd
 
 type Figure = Array CellCoord Cell
 
+type Board = Figure
+
 type PlacingCellsFigure = Array CellCoord PlacingCell
 
-tryMoveFigure :: Figure -> Figure -> Coord -> Coord -> Maybe Coord
+tryMoveFigure :: Board -> Figure -> Coord -> Coord -> Maybe Coord
 tryMoveFigure board figure coord vector =
   let
     newCoord = coord + vector
@@ -120,9 +122,9 @@ boardSize = 9
 figuresToPlaceCount = 3
 
 -- | Frees cells by specified coordinates
-freeAllCells :: Figure -> [CellCoord] -> Figure
-freeAllCells fig coords =
-  fig // fmap (, Free) coords
+freeAllCells :: Board -> [CellCoord] -> Board
+freeAllCells b coords =
+  b // fmap (, Free) coords
 
 -- | Determines whether all cells by specified coordinates are filled
 allCellsAreFilled :: HasCallStack => Figure -> [CellCoord] -> Bool
@@ -139,22 +141,23 @@ full9Ranges = allHorizontal ++ allVertical ++ squares where
   square startRow startColumn = [(startRow + r, startColumn + c) | r <- [0..2], c <- [0..2]]
   squares       = [square (r * 3) (c * 3) | r <- [0..2], c <- [0..2]]
 
-rangesToBeFreed :: Figure -> [[CellCoord]]
+-- | Finds ranges of cells that will be freed.
+rangesToBeFreed :: Board -> [[CellCoord]]
 rangesToBeFreed fig = filter (allCellsAreFilled fig) full9Ranges
 
-removeFilledRanges :: Figure -> Figure
+removeFilledRanges :: Board -> Board
 removeFilledRanges fig = foldl freeAllCells fig $ rangesToBeFreed fig
 
-possibleFigureStartCoordinates :: Figure -> [Coord]
+possibleFigureStartCoordinates :: Board -> [Coord]
 possibleFigureStartCoordinates fig =
   [V2 x y | y <- [0 .. boardSize - figureHeight - 1], x <- [0 .. boardSize - figureWidth - 1]] where
     (figureHeight, figureWidth) = snd $ bounds fig
 
-firstPointWhereFigureCanBePlaced :: HasCallStack => Figure -> Figure -> Maybe Coord
+firstPointWhereFigureCanBePlaced :: HasCallStack => Figure -> Board -> Maybe Coord
 firstPointWhereFigureCanBePlaced fig b =
   listToMaybe $ mapMaybe (\coord -> coord <$ tryPlaceFigure fig coord b) (possibleFigureStartCoordinates fig)
 
-canBePlacedToBoardAtSomePoint :: HasCallStack => Figure -> Figure -> Bool
+canBePlacedToBoardAtSomePoint :: HasCallStack => Figure -> Board -> Bool
 canBePlacedToBoardAtSomePoint fig b =
   isJust $ firstPointWhereFigureCanBePlaced fig b
 
@@ -164,7 +167,7 @@ boardCellToPlacingCell :: Cell -> PlacingCell
 boardCellToPlacingCell Free = PlacingFree
 boardCellToPlacingCell Filled = PlacingFilled
 
-boardToPlacingCells :: Figure -> Array CellCoord PlacingCell
+boardToPlacingCells :: Board -> Array CellCoord PlacingCell
 boardToPlacingCells board =
   board
   & assocs
@@ -175,7 +178,7 @@ markFigureAsPlaced :: FigureInSelection -> Array FigureIndex (Maybe FigureInSele
 markFigureAsPlaced figureInSelection figures =
   figures // [(_figureIndex figureInSelection, Nothing)]
 
-tryPlaceFigure :: HasCallStack => Figure -> Coord -> Figure -> Maybe Figure
+tryPlaceFigure :: HasCallStack => Figure -> Coord -> Board -> Maybe Figure
 tryPlaceFigure figure figureCoord board =
   let
     figureCells =
@@ -195,9 +198,9 @@ tryPlaceFigure figure figureCoord board =
         Free -> tryPlace (b // [(coord, Filled)]) coords
         Filled -> Nothing
 
-addPlacingFigure :: HasCallStack => Figure -> Coord -> Figure -> PlacingCellsFigure
+addPlacingFigure :: HasCallStack => Figure -> Coord -> Board -> PlacingCellsFigure
 addPlacingFigure figure figureCoord board =
-  placingBoard // toBeRemovedCells // figureCells
+  placingBoard // toBeFreedCells // figureCells
   where
     placingBoard = boardToPlacingCells board
     boardWithFigure = fromMaybe board $ tryPlaceFigure figure figureCoord board
@@ -208,7 +211,7 @@ addPlacingFigure figure figureCoord board =
       & assocs
       & map (\(coord, cell) -> (newCoord coord, figureCell (newCoord coord) cell))
 
-    toBeRemovedCells = (, PlacingWillBeFreed) <$> rangesWillBeFreed
+    toBeFreedCells = (, PlacingWillBeFreed) <$> rangesWillBeFreed
 
     newCoord :: CellCoord -> CellCoord
     newCoord (r, c) = (r + figureCoord^._y, c + figureCoord^._x)
@@ -266,7 +269,7 @@ data GameEvent = Tick
 
 data Game = Game
   { _score :: Int,
-    _board :: Figure,
+    _board :: Board,
     _figures :: Array Int (Maybe FigureInSelection),
     _state :: GameState,
     _turnNumber :: Int,

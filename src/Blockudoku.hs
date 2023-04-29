@@ -26,13 +26,14 @@ module Blockudoku
     score,
     turnNumber,
     autoPlay,
+    currentGame,
     emptyFigure,
     initGame,
     figureRows,
     possibleActions,
     boardSize ) where
 
-import Control.Lens ( (&), makeLenses, (^.), (%~), (.~), (+~) )
+import Control.Lens ( (&), makeLenses, (^.), (%~), (.~), (+~), Lens' )
 import Data.Array ( (//), array, bounds, Array, assocs, listArray, elems )
 import System.Random.Stateful ( globalStdGen, UniformRange(uniformRM) )
 import Control.Monad (replicateM, join)
@@ -43,6 +44,7 @@ import MyPrelude ( mapiArray, (!) )
 import qualified Data.Bifunctor
 import System.Random (randomRIO)
 import GHC.Stack (HasCallStack)
+import Undo (History, newHistory, put, undo, redo, current)
 
 ----
 
@@ -270,48 +272,64 @@ data GameState =
 data GameEvent = Tick
   deriving stock (Show, Eq, Ord)
 
-data Game = Game
+data VersionedState = VersionedState
   { _score :: Int,
     _board :: Board,
     _figures :: Array Int (Maybe FigureInSelection),
     _state :: GameState,
-    _turnNumber :: Int,
+    _turnNumber :: Int }
+  deriving stock (Show, Eq)
+
+makeLenses ''VersionedState
+
+data Game = Game
+  { _history :: History VersionedState,
     _autoPlay :: Bool }
   deriving stock (Show)
 
 makeLenses ''Game
 
+currentGame :: Lens' Game VersionedState
+currentGame = history . current
+
+updateCurrent :: Game -> (VersionedState -> VersionedState) -> Game
+updateCurrent g f = history %~ updateCurrent' $ g where
+  updateCurrent' :: History VersionedState -> History VersionedState
+  updateCurrent' = put newCurrent
+  newCurrent :: VersionedState
+  newCurrent = f $ g ^. currentGame
+
 isGameOver :: Game -> Bool
-isGameOver game = case game ^. state of
+isGameOver game = case game ^. currentGame ^. state of
   GameOver -> True
   _ -> False
 
 isPlacingFigure :: Game -> Bool
-isPlacingFigure game = case game ^. state of
+isPlacingFigure game = case game ^. currentGame ^. state of
   PlacingFigure _ _ -> True
   _ -> False
 
 cellsToDisplay :: Game -> PlacingCellsFigure
-cellsToDisplay game = case game ^. Blockudoku.state of
-  PlacingFigure figure coord -> addPlacingFigure (figure ^. figureInSelection) coord $ game ^. board
-  _ -> game ^. board & boardToPlacingCells
+cellsToDisplay game = case game ^. currentGame ^. state of
+  PlacingFigure figure coord -> addPlacingFigure (figure ^. figureInSelection) coord $ game ^. currentGame ^. board
+  _ -> game ^. currentGame ^. board & boardToPlacingCells
 
 figuresToPlace :: Game -> [Maybe (FigureToPlace FigureInSelection)]
 figuresToPlace game =
-  game
+  game ^. currentGame 
   & _figures
   & elems
   & map (fmap (\fig -> FigureToPlace fig $ kind fig)) where
     kind :: FigureInSelection -> FigureToPlaceKind
     kind fig =
-      case game ^. state of
+      case game ^. currentGame ^. state of
         GameOver -> CannotBePlaced
         SelectingFigure selectedFigure -> canBePlaced selectedFigure fig Selected
         PlacingFigure selectedFigure _ -> canBePlaced selectedFigure fig SelectedPlacing
     canBePlaced :: FigureInSelection -> FigureInSelection -> FigureToPlaceKind -> FigureToPlaceKind
     canBePlaced selectedFigure fig selectedMode
       | fig == selectedFigure = selectedMode
-      | canBePlacedToBoardAtSomePoint (fig ^. figureInSelection) (game ^. board) = CanBePlaced
+      | canBePlacedToBoardAtSomePoint (fig ^. figureInSelection) (game ^. currentGame ^. board) = CanBePlaced
       | otherwise = CannotBePlaced      
 
 --- Figures generation ---
@@ -442,12 +460,14 @@ initGame = do
           [((i, j), Free) | i <- [0 .. boardSize - 1], j <- [0 .. boardSize - 1]]
   boardFigures <- randomFigures
   let justFigures = Just <$> boardFigures
-  let game = Game
+  let coreGame = VersionedState
         { _score = 0,
           _board = _board,
           _figures = justFigures,
           _state = SelectingFigure $ boardFigures ! 0,
-          _turnNumber = 1,
+          _turnNumber = 1 }
+  let game = Game 
+        { _history = newHistory coreGame,
           _autoPlay = False }
   return game
 
@@ -553,7 +573,7 @@ randomElement list = do
 
 possibleActionsImpl :: HasCallStack => Game -> Bool -> IO [(Action, Game)]
 possibleActionsImpl game generateAutoPlay = do
-  case game ^. state of
+  case game ^. currentGame ^. state of
     SelectingFigure figure -> actions where
       actions = do
         newGame <- restartGameAction
@@ -571,23 +591,23 @@ possibleActionsImpl game generateAutoPlay = do
       moveFigure :: Action -> (FigureIndex -> [FigureIndex]) -> Maybe (Action, Game)
       moveFigure action calculateNextIndices = do
         let nextIndices = calculateNextIndices $ figure ^. figureIndex
-        nextFigure <- tryFindNextFigureToSelect (game ^. board) (game ^. figures) nextIndices
-        let game' = game & state .~ SelectingFigure nextFigure
+        nextFigure <- tryFindNextFigureToSelect (game ^. currentGame ^. board) (game ^. currentGame ^. figures) nextIndices
+        let game' = updateCurrent game $ state .~ SelectingFigure nextFigure
         pure (action, game')
 
       startPlacing = do
-        let coord = fromMaybe zeroCoord $ firstPointWhereFigureCanBePlaced (figure ^. figureInSelection) (game ^. board)
-        let game' = game & state .~ PlacingFigure figure coord
+        let coord = fromMaybe zeroCoord $ firstPointWhereFigureCanBePlaced (figure ^. figureInSelection) (game ^. currentGame ^. board)
+        let game' = updateCurrent game $ state .~ PlacingFigure figure coord
         pure (UserAction StartPlacingFigure, game')
 
     PlacingFigure figure coord -> actions where
-      board_ = game ^. board
+      board_ = game ^. currentGame ^. board
       figureItself = figure ^. figureInSelection
 
       tryMove :: Coord -> Action -> Maybe (Action, Game)
       tryMove movement action = do
         newCoord <- tryMoveFigure board_ figureItself coord movement
-        let game' = game & state .~ PlacingFigure figure newCoord
+        let game' = updateCurrent game $ state .~ PlacingFigure figure newCoord
         pure (action, game')
 
       placeFigureAction :: HasCallStack => IO (Maybe (Action, Game))
@@ -595,25 +615,28 @@ possibleActionsImpl game generateAutoPlay = do
         case tryPlaceFigure figureItself coord board_ of
           Nothing -> pure Nothing
           Just newBoard -> do
-            let figuresWithSelectedPlaced = markFigureAsPlaced figure $ game ^. figures
+            let figuresWithSelectedPlaced = markFigureAsPlaced figure $ game ^. currentGame ^. figures
             (newFigures, turnIncrement, nextIndices) <-
               if allPlaced $ elems figuresWithSelectedPlaced then
                 fmap (, 1, [0 .. figuresToPlaceCount - 1]) $ fmap Just <$> randomFigures
               else
                 pure (figuresWithSelectedPlaced, 0, nextFigureIndices $ figure ^. figureIndex)
-            let game' =
+            let state' =
                   figures .~ newFigures
                   $ board .~ removeFilledRanges newBoard
                   $ turnNumber +~ turnIncrement
-                  $ game
-            let maybeNextFig = tryFindNextFigureToSelect (game' ^. board) newFigures nextIndices
+                  $ game ^. currentGame
+            let maybeNextFig = tryFindNextFigureToSelect (state' ^. board) newFigures nextIndices
             pure $ case maybeNextFig of
               Just nextFig ->
-                let game'' = state .~ SelectingFigure nextFig $ game' in
-                Just (UserAction PlaceFigure, game'')
+                let
+                  state'' = state .~ SelectingFigure nextFig $ state'
+                  game' = updateCurrent game $ const state''
+                in
+                Just (UserAction PlaceFigure, game')
               Nothing ->
-                let game'' = state .~ GameOver $ game' in
-                Just (UserAction PlaceFigure, game'')
+                let game' = updateCurrent game $ const $ state .~ GameOver $ state' in
+                Just (UserAction PlaceFigure, game')
 
       actions :: HasCallStack => IO [(Action, Game)]
       actions = do
@@ -629,7 +652,7 @@ possibleActionsImpl game generateAutoPlay = do
             newGame,
             toggleAutoPlayAction game,
             autoPlayTurn,
-            Just (UserAction CancelPlacingFigure, game & state .~ SelectingFigure figure)
+            Just (UserAction CancelPlacingFigure, updateCurrent game $ state .~ SelectingFigure figure)
           ]
     GameOver -> do
       newGame <- restartGameAction

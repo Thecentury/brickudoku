@@ -29,7 +29,7 @@ import Blockudoku
       autoPlay,
       GameEvent (..),
       figureInSelection,
-      FigureInSelection )
+      FigureInSelection, currentGame )
 
 import Control.Monad.State.Strict
     ( MonadIO(liftIO), MonadState(put, get) )
@@ -110,7 +110,7 @@ drawUI game =
     centralColumn =
       wrapWithAutoPlayBorder
       $ applyGameOverPalette
-      $ C.hCenter (str $ "Turn: " ++ show (game ^. turnNumber))
+      $ C.hCenter (str $ "Turn: " ++ show (game ^. currentGame . turnNumber))
       <=> C.hCenter (withPlacingFigureBorder $ drawGrid game)
       <=> padTop (Pad 1) figuresToPlaceWidgets
     figuresToPlaceWidgets =
@@ -166,7 +166,7 @@ drawScore game =
   $ B.borderWithLabel (str "Score")
   $ C.hCenter
   $ padAll 1
-  $ str $ show $ game ^. score
+  $ str $ show $ game ^. currentGame . score
 
 drawGrid :: Game -> Widget Name
 drawGrid game =

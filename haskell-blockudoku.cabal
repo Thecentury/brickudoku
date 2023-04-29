@@ -29,6 +29,7 @@ library
       Blockudoku
       MyPrelude
       UI
+      Undo
   other-modules:
       Paths_haskell_blockudoku
   hs-source-dirs:

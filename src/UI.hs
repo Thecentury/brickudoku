@@ -26,6 +26,7 @@ import Blockudoku
       possibleActions,
       isGameOver,
       isPlacingFigure,
+      boardSize,
       GameEvent (..),
       figureInSelection,
       FigureInSelection )
@@ -48,6 +49,7 @@ import Control.Lens ((^.), (&))
 import qualified Graphics.Vty as V
 import Data.Array (elems, Array)
 import Data.Functor (void)
+import Data.List.Extra (chunksOf)
 import GHC.Conc.Sync (getUncaughtExceptionHandler, setUncaughtExceptionHandler)
 import Control.Exception (SomeException, Exception (displayException), handle)
 import Data.Map (Map)
@@ -55,6 +57,8 @@ import qualified Data.Map as Map
 import Brick.BChan (newBChan, writeBChan)
 import Control.Concurrent (threadDelay, forkIO)
 import Control.Monad (forever)
+import Data.List (intercalate)
+import Brick.Widgets.Border (joinableBorder)
 
 type Name = ()
 
@@ -151,9 +155,10 @@ drawScore game =
 drawGrid :: Game -> Widget Name
 drawGrid game =
   withBorderStyle BS.unicodeRounded
+  $ joinBorders
   $ B.border
   $ padAll 0
-  $ drawFigure drawPlacingCell
+  $ drawBoard drawPlacingCell
   $ cellsToDisplay game
 
 filledCell :: Widget n
@@ -167,11 +172,18 @@ drawPlacingCell PlacingFilled = withAttr filledCellAttr filledCell
 drawPlacingCell PlacingCanPlaceFullFigure = withAttr placingCanPlaceFullFigureAttr filledCell
 drawPlacingCell PlacingCanPlaceButNotFullFigure = withAttr placingCanPlaceButNotFullFigure filledCell
 drawPlacingCell PlacingCannotPlace = withAttr placingCannotPlaceAttr filledCell
-drawPlacingCell PlacingWillBeFreed = withAttr placingWillBeFreed filledCell
+drawPlacingCell PlacingWillBeFreed = withAttr placingWillBeFreedAttr filledCell
+
+drawBoard :: (a -> Widget Name) -> Array CellCoord a -> Widget Name
+drawBoard drawOneCell figure = vBox allRows where
+  cellRows = hBox . intercalate [verticalBar] . chunksOf 3 . map drawOneCell <$> figureRows figure
+  horizontalRow = withAttr board3x3BorderAttr $ hBox $ intercalate [str "┼"] $ chunksOf (2 * 3) $ replicate (2 * boardSize) $ str "─"
+  verticalBar = withAttr board3x3BorderAttr $ str "│"
+  allRows = intercalate [horizontalRow] $ chunksOf 3 cellRows
 
 drawFigure :: (a -> Widget Name) -> Array CellCoord a -> Widget Name
 drawFigure drawOneCell figure = vBox cellRows where
-  cellRows = map (hBox . map drawOneCell) $ figureRows figure
+  cellRows = hBox . map drawOneCell <$> figureRows figure
 
 selectedFigureBorderMappings :: [(A.AttrName, V.Attr)]
 selectedFigureBorderMappings =
@@ -216,13 +228,14 @@ drawCell Filled = withAttr filledCellAttr $ str "  "
 
 --- Attributes ---
 
-emptyCellAttr, filledCellAttr, placingCanPlaceFullFigureAttr, placingCanPlaceButNotFullFigure, placingCannotPlaceAttr, placingWillBeFreed :: AttrName
+emptyCellAttr, filledCellAttr, placingCanPlaceFullFigureAttr, placingCanPlaceButNotFullFigure, placingCannotPlaceAttr, placingWillBeFreedAttr, board3x3BorderAttr :: AttrName
 emptyCellAttr = attrName "emptyCell"
 filledCellAttr = attrName "filledCell"
 placingCanPlaceFullFigureAttr = attrName "placingCanPlaceFullFigure"
 placingCanPlaceButNotFullFigure = attrName "placingCanPlaceButNotFullFigure"
 placingCannotPlaceAttr = attrName "placingCannotPlace"
-placingWillBeFreed = attrName "placingWillBeFreed"
+placingWillBeFreedAttr = attrName "placingWillBeFreed"
+board3x3BorderAttr = attrName "board3x3Border"
 
 gameOverAttr :: AttrName
 gameOverAttr = attrName "gameOver"
@@ -235,7 +248,8 @@ theMap = attrMap V.defAttr
     (placingCanPlaceFullFigureAttr, V.brightBlue `on` V.brightBlue),
     (placingCanPlaceButNotFullFigure, V.magenta `on` V.magenta),
     (placingCannotPlaceAttr, V.yellow `on` V.yellow),
-    (placingWillBeFreed, V.green `on` V.green),
+    (placingWillBeFreedAttr, V.green `on` V.green),
+    (board3x3BorderAttr, fg V.white),
     (gameOverAttr, fg V.red)
   ]
 
@@ -250,7 +264,8 @@ gameOverMap =
     (placingCanPlaceFullFigureAttr, disabled),
     (placingCanPlaceButNotFullFigure, disabled),
     (placingCannotPlaceAttr, disabled),
-    (placingWillBeFreed, disabled),
+    (placingWillBeFreedAttr, disabled),
+    (board3x3BorderAttr, disabled),
     (gameOverAttr, fg V.brightRed)
   ]
 

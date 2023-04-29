@@ -22,13 +22,15 @@ module Blockudoku
     Action(..),
     GameEvent(..),
     figuresToPlace,
+    -- todo is it used?
     board,
     score,
     turnNumber,
     emptyFigure,
     initGame,
     figureRows,
-    possibleActions ) where
+    possibleActions,
+    boardSize ) where
 
 import Control.Lens ( (&), makeLenses, (^.), (%~), (.~), (+~) )
 import Data.Array ( (//), array, bounds, Array, assocs, listArray, elems )

@@ -300,19 +300,19 @@ updateCurrent g f = history %~ updateCurrent' $ g where
   newCurrent = f $ g ^. currentGame
 
 isGameOver :: Game -> Bool
-isGameOver game = case game ^. currentGame ^. state of
+isGameOver game = case game ^. currentGame . state of
   GameOver -> True
   _ -> False
 
 isPlacingFigure :: Game -> Bool
-isPlacingFigure game = case game ^. currentGame ^. state of
+isPlacingFigure game = case game ^. currentGame . state of
   PlacingFigure _ _ -> True
   _ -> False
 
 cellsToDisplay :: Game -> PlacingCellsFigure
-cellsToDisplay game = case game ^. currentGame ^. state of
-  PlacingFigure figure coord -> addPlacingFigure (figure ^. figureInSelection) coord $ game ^. currentGame ^. board
-  _ -> game ^. currentGame ^. board & boardToPlacingCells
+cellsToDisplay game = case game ^. currentGame . state of
+  PlacingFigure figure coord -> addPlacingFigure (figure ^. figureInSelection) coord $ game ^. currentGame . board
+  _ -> game ^. currentGame . board & boardToPlacingCells
 
 figuresToPlace :: Game -> [Maybe (FigureToPlace FigureInSelection)]
 figuresToPlace game =
@@ -322,14 +322,14 @@ figuresToPlace game =
   & map (fmap (\fig -> FigureToPlace fig $ kind fig)) where
     kind :: FigureInSelection -> FigureToPlaceKind
     kind fig =
-      case game ^. currentGame ^. state of
+      case game ^. currentGame . state of
         GameOver -> CannotBePlaced
         SelectingFigure selectedFigure -> canBePlaced selectedFigure fig Selected
         PlacingFigure selectedFigure _ -> canBePlaced selectedFigure fig SelectedPlacing
     canBePlaced :: FigureInSelection -> FigureInSelection -> FigureToPlaceKind -> FigureToPlaceKind
     canBePlaced selectedFigure fig selectedMode
       | fig == selectedFigure = selectedMode
-      | canBePlacedToBoardAtSomePoint (fig ^. figureInSelection) (game ^. currentGame ^. board) = CanBePlaced
+      | canBePlacedToBoardAtSomePoint (fig ^. figureInSelection) (game ^. currentGame . board) = CanBePlaced
       | otherwise = CannotBePlaced      
 
 --- Figures generation ---
@@ -573,7 +573,7 @@ randomElement list = do
 
 possibleActionsImpl :: HasCallStack => Game -> Bool -> IO [(Action, Game)]
 possibleActionsImpl game generateAutoPlay = do
-  case game ^. currentGame ^. state of
+  case game ^. currentGame . state of
     SelectingFigure figure -> actions where
       actions = do
         newGame <- restartGameAction
@@ -591,17 +591,17 @@ possibleActionsImpl game generateAutoPlay = do
       moveFigure :: Action -> (FigureIndex -> [FigureIndex]) -> Maybe (Action, Game)
       moveFigure action calculateNextIndices = do
         let nextIndices = calculateNextIndices $ figure ^. figureIndex
-        nextFigure <- tryFindNextFigureToSelect (game ^. currentGame ^. board) (game ^. currentGame ^. figures) nextIndices
+        nextFigure <- tryFindNextFigureToSelect (game ^. currentGame . board) (game ^. currentGame . figures) nextIndices
         let game' = updateCurrent game $ state .~ SelectingFigure nextFigure
         pure (action, game')
 
       startPlacing = do
-        let coord = fromMaybe zeroCoord $ firstPointWhereFigureCanBePlaced (figure ^. figureInSelection) (game ^. currentGame ^. board)
+        let coord = fromMaybe zeroCoord $ firstPointWhereFigureCanBePlaced (figure ^. figureInSelection) (game ^. currentGame . board)
         let game' = updateCurrent game $ state .~ PlacingFigure figure coord
         pure (UserAction StartPlacingFigure, game')
 
     PlacingFigure figure coord -> actions where
-      board_ = game ^. currentGame ^. board
+      board_ = game ^. currentGame . board
       figureItself = figure ^. figureInSelection
 
       tryMove :: Coord -> Action -> Maybe (Action, Game)
@@ -615,7 +615,7 @@ possibleActionsImpl game generateAutoPlay = do
         case tryPlaceFigure figureItself coord board_ of
           Nothing -> pure Nothing
           Just newBoard -> do
-            let figuresWithSelectedPlaced = markFigureAsPlaced figure $ game ^. currentGame ^. figures
+            let figuresWithSelectedPlaced = markFigureAsPlaced figure $ game ^. currentGame . figures
             (newFigures, turnIncrement, nextIndices) <-
               if allPlaced $ elems figuresWithSelectedPlaced then
                 fmap (, 1, [0 .. figuresToPlaceCount - 1]) $ fmap Just <$> randomFigures

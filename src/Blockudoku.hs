@@ -50,6 +50,7 @@ data Cell =
 data PlacingCell =
   PlacingFree |
   PlacingFilled |
+  PlacingWillBeFreed |
   PlacingCanPlaceFullFigure |
   PlacingCanPlaceButNotFullFigure |
   PlacingCannotPlace
@@ -112,6 +113,53 @@ tryMoveFigure board figure coord vector =
     else
       Nothing
 
+----
+
+boardSize, figuresToPlaceCount :: Int
+boardSize = 9
+figuresToPlaceCount = 3
+
+-- | Frees cells by specified coordinates
+freeAllCells :: Figure -> [CellCoord] -> Figure
+freeAllCells fig coords =
+  fig // fmap (, Free) coords
+
+-- | Determines whether all cells by specified coordinates are filled
+allCellsAreFilled :: HasCallStack => Figure -> [CellCoord] -> Bool
+allCellsAreFilled fig coords =
+  coords & fmap (fig !) & all (== Filled)
+
+full9Ranges :: [[CellCoord]]
+full9Ranges = allHorizontal ++ allVertical ++ squares where
+  horizontal r  = fmap (r, ) all9
+  vertical   c  = fmap (, c) all9
+  allHorizontal = fmap horizontal all9
+  allVertical   = fmap vertical all9
+  all9          = [0 .. boardSize - 1]
+  square startRow startColumn = [(startRow + r, startColumn + c) | r <- [0..2], c <- [0..2]]
+  squares       = [square (r * 3) (c * 3) | r <- [0..2], c <- [0..2]]
+
+rangesToBeFreed :: Figure -> [[CellCoord]]
+rangesToBeFreed fig = filter (allCellsAreFilled fig) full9Ranges
+
+removeFilledRanges :: Figure -> Figure
+removeFilledRanges fig = foldl freeAllCells fig $ rangesToBeFreed fig
+
+possibleFigureStartCoordinates :: Figure -> [Coord]
+possibleFigureStartCoordinates fig =
+  [V2 x y | y <- [0 .. boardSize - figureHeight - 1], x <- [0 .. boardSize - figureWidth - 1]] where
+    (figureHeight, figureWidth) = snd $ bounds fig
+
+firstPointWhereFigureCanBePlaced :: HasCallStack => Figure -> Figure -> Maybe Coord
+firstPointWhereFigureCanBePlaced fig b =
+  listToMaybe $ mapMaybe (\coord -> coord <$ tryPlaceFigure fig coord b) (possibleFigureStartCoordinates fig)
+
+canBePlacedToBoardAtSomePoint :: HasCallStack => Figure -> Figure -> Bool
+canBePlacedToBoardAtSomePoint fig b =
+  isJust $ firstPointWhereFigureCanBePlaced fig b
+
+----
+
 boardCellToPlacingCell :: Cell -> PlacingCell
 boardCellToPlacingCell Free = PlacingFree
 boardCellToPlacingCell Filled = PlacingFilled
@@ -149,14 +197,18 @@ tryPlaceFigure figure figureCoord board =
 
 addPlacingFigure :: HasCallStack => Figure -> Coord -> Figure -> PlacingCellsFigure
 addPlacingFigure figure figureCoord board =
-  placingBoard // figureCells
+  placingBoard // toBeRemovedCells // figureCells
   where
     placingBoard = boardToPlacingCells board
+    boardWithFigure = fromMaybe board $ tryPlaceFigure figure figureCoord board
+    rangesWillBeFreed = join $ rangesToBeFreed boardWithFigure
 
     figureCells =
       figure
       & assocs
       & map (\(coord, cell) -> (newCoord coord, figureCell (newCoord coord) cell))
+
+    toBeRemovedCells = (, PlacingWillBeFreed) <$> rangesWillBeFreed
 
     newCoord :: CellCoord -> CellCoord
     newCoord (r, c) = (r + figureCoord^._y, c + figureCoord^._x)
@@ -250,10 +302,6 @@ figuresToPlace game =
       | fig == selectedFigure = selectedMode
       | canBePlacedToBoardAtSomePoint (fig ^. figureInSelection) (game ^. board) = CanBePlaced
       | otherwise = CannotBePlaced      
-
-boardSize, figuresToPlaceCount :: Int
-boardSize = 9
-figuresToPlaceCount = 3
 
 --- Figures generation ---
 
@@ -424,46 +472,6 @@ tryFindNextFigureToSelect b figs nextIndices =
 
     nexts :: [Maybe FigureInSelection]
     nexts = (figs !) <$> nextIndices
-
-----
-
--- | Frees cells by specified coordinates
-freeAllCells :: Figure -> [CellCoord] -> Figure
-freeAllCells fig coords =
-  fig // fmap (, Free) coords
-
--- | Determines whether all cells by specified coordinates are filled
-allCellsAreFilled :: HasCallStack => Figure -> [CellCoord] -> Bool
-allCellsAreFilled fig coords =
-  coords & fmap (fig !) & all (== Filled)
-
-full9Ranges :: [[CellCoord]]
-full9Ranges = allHorizontal ++ allVertical ++ squares where
-  horizontal r  = fmap (r, ) all9
-  vertical   c  = fmap (, c) all9
-  allHorizontal = fmap horizontal all9
-  allVertical   = fmap vertical all9
-  all9          = [0 .. boardSize - 1]
-  square startRow startColumn = [(startRow + r, startColumn + c) | r <- [0..2], c <- [0..2]]
-  squares       = [square (r * 3) (c * 3) | r <- [0..2], c <- [0..2]]
-
-removeFilledRanges :: Figure -> Figure
-removeFilledRanges fig =
-  foldl freeAllCells fig fullRanges where
-    fullRanges = filter (allCellsAreFilled fig) full9Ranges
-
-possibleFigureStartCoordinates :: Figure -> [Coord]
-possibleFigureStartCoordinates fig =
-  [V2 x y | y <- [0 .. boardSize - figureHeight - 1], x <- [0 .. boardSize - figureWidth - 1]] where
-    (figureHeight, figureWidth) = snd $ bounds fig
-
-firstPointWhereFigureCanBePlaced :: HasCallStack => Figure -> Figure -> Maybe Coord
-firstPointWhereFigureCanBePlaced fig b =
-  listToMaybe $ mapMaybe (\coord -> coord <$ tryPlaceFigure fig coord b) (possibleFigureStartCoordinates fig)
-
-canBePlacedToBoardAtSomePoint :: HasCallStack => Figure -> Figure -> Bool
-canBePlacedToBoardAtSomePoint fig b =
-  isJust $ firstPointWhereFigureCanBePlaced fig b
 
 ---- Commands
 

@@ -160,6 +160,7 @@ drawPlacingCell PlacingFilled = withAttr filledCellAttr filledCell
 drawPlacingCell PlacingCanPlaceFullFigure = withAttr placingCanPlaceFullFigureAttr filledCell
 drawPlacingCell PlacingCanPlaceButNotFullFigure = withAttr placingCanPlaceButNotFullFigure filledCell
 drawPlacingCell PlacingCannotPlace = withAttr placingCannotPlaceAttr filledCell
+drawPlacingCell PlacingWillBeFreed = withAttr placingWillBeFreed filledCell
 
 drawFigure :: (a -> Widget Name) -> Array CellCoord a -> Widget Name
 drawFigure drawOneCell figure = vBox cellRows where
@@ -208,12 +209,13 @@ drawCell Filled = withAttr filledCellAttr $ str "  "
 
 --- Attributes ---
 
-emptyCellAttr, filledCellAttr, placingCanPlaceFullFigureAttr, placingCanPlaceButNotFullFigure, placingCannotPlaceAttr :: AttrName
+emptyCellAttr, filledCellAttr, placingCanPlaceFullFigureAttr, placingCanPlaceButNotFullFigure, placingCannotPlaceAttr, placingWillBeFreed :: AttrName
 emptyCellAttr = attrName "emptyCell"
 filledCellAttr = attrName "filledCell"
 placingCanPlaceFullFigureAttr = attrName "placingCanPlaceFullFigure"
 placingCanPlaceButNotFullFigure = attrName "placingCanPlaceButNotFullFigure"
 placingCannotPlaceAttr = attrName "placingCannotPlace"
+placingWillBeFreed = attrName "placingWillBeFreed"
 
 gameOverAttr :: AttrName
 gameOverAttr = attrName "gameOver"
@@ -226,17 +228,22 @@ theMap = attrMap V.defAttr
     (placingCanPlaceFullFigureAttr, V.brightBlue `on` V.brightBlue),
     (placingCanPlaceButNotFullFigure, V.magenta `on` V.magenta),
     (placingCannotPlaceAttr, V.yellow `on` V.yellow),
+    (placingWillBeFreed, V.green `on` V.green),
     (gameOverAttr, fg V.red)
   ]
 
 gameOverMap :: [(AttrName, V.Attr)]
 gameOverMap =
+  let
+    disabled = V.white `on` V.white
+  in
   [
     (emptyCellAttr, V.defAttr),
-    (filledCellAttr, V.white `on` V.white),
-    (placingCanPlaceFullFigureAttr, V.white `on` V.white),
-    (placingCanPlaceButNotFullFigure, V.white `on` V.white),
-    (placingCannotPlaceAttr, V.white `on` V.white),
+    (filledCellAttr, disabled),
+    (placingCanPlaceFullFigureAttr, disabled),
+    (placingCanPlaceButNotFullFigure, disabled),
+    (placingCannotPlaceAttr, disabled),
+    (placingWillBeFreed, disabled),
     (gameOverAttr, fg V.brightRed)
   ]
 

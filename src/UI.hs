@@ -25,6 +25,7 @@ import Blockudoku
       figureRows,
       possibleActions,
       isGameOver,
+      isPlacingFigure,
       GameEvent (..),
       figureInSelection,
       FigureInSelection )
@@ -105,7 +106,7 @@ drawUI game =
     centralColumn =
       applyGameOverPalette
       $ C.hCenter (str $ "Turn: " ++ show (game ^. turnNumber))
-      <=> C.hCenter (drawGrid game)
+      <=> C.hCenter (withPlacingFigureBorder $ drawGrid game)
       <=> padTop (Pad 1) figuresToPlaceWidgets
     figuresToPlaceWidgets =
       C.hCenter
@@ -131,6 +132,12 @@ drawUI game =
         $ str "Game over"
       else
          emptyWidget
+    withPlacingFigureBorder :: Widget Name -> Widget Name
+    withPlacingFigureBorder widget =
+      if isPlacingFigure game then
+        updateAttrMap (A.applyAttrMappings selectedPlacingFigureBorderMappings) widget
+      else  
+        widget
 
 drawScore :: Game -> Widget Name
 drawScore game =

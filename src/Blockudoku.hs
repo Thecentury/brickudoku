@@ -16,6 +16,7 @@ module Blockudoku
     figureInSelection,
     cellsToDisplay,
     isGameOver,
+    isPlacingFigure,
     UserAction(..),
     SystemAction(..),
     Action(..),
@@ -281,6 +282,11 @@ makeLenses ''Game
 isGameOver :: Game -> Bool
 isGameOver game = case game ^. state of
   GameOver -> True
+  _ -> False
+
+isPlacingFigure :: Game -> Bool
+isPlacingFigure game = case game ^. state of
+  PlacingFigure _ _ -> True
   _ -> False
 
 cellsToDisplay :: Game -> PlacingCellsFigure

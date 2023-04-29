@@ -34,8 +34,7 @@ import Data.Array ( (//), array, bounds, Array, assocs, listArray, elems )
 import System.Random.Stateful ( globalStdGen, UniformRange(uniformRM) )
 import Control.Monad (replicateM, join)
 import Data.List (find)
-import qualified Data.List as List
-import Data.Maybe (mapMaybe, isJust, isNothing, catMaybes)
+import Data.Maybe (mapMaybe, isJust, isNothing, catMaybes, listToMaybe, fromMaybe)
 import Linear.V2 (V2(..), _x, _y)
 import MyPrelude ( mapiArray, (!) )
 import qualified Data.Bifunctor
@@ -455,13 +454,16 @@ removeFilledRanges fig =
 
 possibleFigureStartCoordinates :: Figure -> [Coord]
 possibleFigureStartCoordinates fig =
-  [V2 x y | x <- [0 .. boardSize - figureWidth - 1], y <- [0 .. boardSize - figureHeight - 1]] where
+  [V2 x y | y <- [0 .. boardSize - figureHeight - 1], x <- [0 .. boardSize - figureWidth - 1]] where
     (figureHeight, figureWidth) = snd $ bounds fig
+
+firstPointWhereFigureCanBePlaced :: HasCallStack => Figure -> Figure -> Maybe Coord
+firstPointWhereFigureCanBePlaced fig b =
+  listToMaybe $ mapMaybe (\coord -> coord <$ tryPlaceFigure fig coord b) (possibleFigureStartCoordinates fig)
 
 canBePlacedToBoardAtSomePoint :: HasCallStack => Figure -> Figure -> Bool
 canBePlacedToBoardAtSomePoint fig b =
-  List.any (\coord -> tryPlaceFigure fig coord b & isJust) starts where
-    starts = possibleFigureStartCoordinates fig
+  isJust $ firstPointWhereFigureCanBePlaced fig b
 
 ---- Commands
 
@@ -555,7 +557,8 @@ possibleActionsImpl game generateAutoPlay = do
         pure (action, game')
 
       startPlacing = do
-        let game' = game & state .~ PlacingFigure figure zeroCoord
+        let coord = fromMaybe zeroCoord $ firstPointWhereFigureCanBePlaced (figure ^. figureInSelection) (game ^. board)
+        let game' = game & state .~ PlacingFigure figure coord
         pure (UserAction StartPlacingFigure, game')
 
     PlacingFigure figure coord -> actions where

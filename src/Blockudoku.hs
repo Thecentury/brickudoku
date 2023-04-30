@@ -315,12 +315,17 @@ makeLenses ''Game
 currentGame :: Lens' Game VersionedState
 currentGame = history . current
 
-updateCurrent :: Game -> (VersionedState -> VersionedState) -> Game
-updateCurrent g f = history %~ updateCurrent' $ g where
+-- | Puts the new version of the game to the history
+putNewVersion :: Game -> (VersionedState -> VersionedState) -> Game
+putNewVersion g f = history %~ updateCurrent' $ g where
   updateCurrent' :: History VersionedState -> History VersionedState
   updateCurrent' = put newCurrent
   newCurrent :: VersionedState
   newCurrent = f $ g ^. currentGame
+
+-- | Updates the current version of the game without putting it to the history
+updateCurrentNotVersioned :: Game -> (VersionedState -> VersionedState) -> Game
+updateCurrentNotVersioned g f = g & currentGame %~ f
 
 isGameOver :: Game -> Bool
 isGameOver game = case game ^. currentGame . state of
@@ -625,12 +630,12 @@ possibleActionsImpl game generateAutoPlay = do
       moveFigure action calculateNextIndices = do
         let nextIndices = calculateNextIndices $ figure ^. figureIndex
         nextFigure <- tryFindNextFigureToSelect (game ^. currentGame . board) (game ^. currentGame . figures) nextIndices
-        let game' = updateCurrent game $ state .~ SelectingFigure nextFigure
+        let game' = updateCurrentNotVersioned game $ state .~ SelectingFigure nextFigure
         pure (action, game')
 
       startPlacing = do
         let coord = fromMaybe zeroCoord $ firstPointWhereFigureCanBePlaced (figure ^. figureInSelection) (game ^. currentGame . board)
-        let game' = updateCurrent game $ state .~ PlacingFigure figure coord
+        let game' = updateCurrentNotVersioned game $ state .~ PlacingFigure figure coord
         pure (UserAction StartPlacingFigure, game')
 
     PlacingFigure figure coord -> actions where
@@ -640,7 +645,7 @@ possibleActionsImpl game generateAutoPlay = do
       tryMove :: Coord -> Action -> Maybe (Action, Game)
       tryMove movement action = do
         newCoord <- tryMoveFigure board_ figureItself coord movement
-        let game' = updateCurrent game $ state .~ PlacingFigure figure newCoord
+        let game' = updateCurrentNotVersioned game $ state .~ PlacingFigure figure newCoord
         pure (action, game')
 
       placeFigureAction :: HasCallStack => IO (Maybe (Action, Game))
@@ -664,11 +669,11 @@ possibleActionsImpl game generateAutoPlay = do
               Just nextFig ->
                 let
                   state'' = state .~ SelectingFigure nextFig $ state'
-                  game' = updateCurrent game $ const state''
+                  game' = putNewVersion game $ const state''
                 in
                 Just (UserAction PlaceFigure, game')
               Nothing ->
-                let game' = updateCurrent game $ const $ state .~ GameOver $ state' in
+                let game' = putNewVersion game $ const $ state .~ GameOver $ state' in
                 Just (UserAction PlaceFigure, game')
 
       actions :: HasCallStack => IO [(Action, Game)]
@@ -687,13 +692,14 @@ possibleActionsImpl game generateAutoPlay = do
             autoPlayTurn,
             undoAction game,
             redoAction game,
-            Just (UserAction CancelPlacingFigure, updateCurrent game $ state .~ SelectingFigure figure)
+            Just (UserAction CancelPlacingFigure, updateCurrentNotVersioned game $ state .~ SelectingFigure figure)
           ]
     GameOver -> do
       newGame <- restartGameAction
       pure $ catMaybes [
           newGame,
-          undoAction game
+          undoAction game,
+          toggleAutoPlayAction game
         ]
 
 undoAction :: Game -> Maybe (Action, Game)

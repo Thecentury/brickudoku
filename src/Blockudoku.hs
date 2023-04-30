@@ -54,6 +54,7 @@ data Cell =
 
 data VisualCell =
   VFree |
+  VFreeAltStyle |
   VFilled |
   VWillBeFreed |
   VCanPlaceFullFigure |
@@ -178,6 +179,28 @@ boardToPlacingCells board =
   & assocs
   & map (Data.Bifunctor.second boardCellToPlacingCell)
   & array (bounds board)
+
+addAltStyleCells :: Array CellCoord VisualCell -> Array CellCoord VisualCell
+addAltStyleCells cells = cells // mapMaybe addAltStyleCell (assocs cells) where
+  addAltStyleCell :: (CellCoord, VisualCell) -> Maybe (CellCoord, VisualCell)
+  addAltStyleCell (coord, VFree) =
+    if isAltStyleCell coord then
+      Just (coord, VFreeAltStyle)
+    else
+      Nothing
+  addAltStyleCell _ = Nothing
+
+  isAltStyleCell :: CellCoord -> Bool
+  isAltStyleCell (r, c) = isAltStyleCellThick (thickColumnNumber c) (thickColumnNumber r)
+
+  isAltStyleCellThick 0 1 = True 
+  isAltStyleCellThick 1 0 = True 
+  isAltStyleCellThick 1 2 = True 
+  isAltStyleCellThick 2 1 = True
+  isAltStyleCellThick _ _ = False 
+
+  thickColumnNumber :: Int -> Int
+  thickColumnNumber x = x `div` 3
 
 markFigureAsPlaced :: FigureInSelection -> Array FigureIndex (Maybe FigureInSelection) -> Array FigureIndex (Maybe FigureInSelection)
 markFigureAsPlaced figureInSelection figures =
@@ -311,8 +334,14 @@ isPlacingFigure game = case game ^. currentGame . state of
 
 cellsToDisplay :: Game -> PlacingCellsFigure
 cellsToDisplay game = case game ^. currentGame . state of
-  PlacingFigure figure coord -> addPlacingFigure (figure ^. figureInSelection) coord $ game ^. currentGame . board
-  _ -> game ^. currentGame . board & boardToPlacingCells
+  PlacingFigure figure coord -> 
+    addAltStyleCells 
+    $ addPlacingFigure (figure ^. figureInSelection) coord 
+    $ game ^. currentGame . board
+  _ -> 
+    addAltStyleCells 
+    $ boardToPlacingCells 
+    $ game ^. currentGame . board
 
 figuresToPlace :: Game -> [Maybe (FigureToPlace FigureInSelection)]
 figuresToPlace game =

@@ -39,7 +39,7 @@ import Brick
   , halt
   , hLimit, vBox, hBox, padRight, padLeft, padTop, padAll, Padding(..)
   , withBorderStyle, str
-  , attrMap, withAttr, emptyWidget, AttrName, on, fg
+  , attrMap, withAttr, emptyWidget, AttrName, on, fg, bg
   , (<+>), (<=>), attrName, joinBorders, padLeftRight, vLimit, updateAttrMap)
 import qualified Brick.AttrMap as A
 import qualified Brick.Widgets.Border as B
@@ -178,18 +178,17 @@ drawGrid game =
   $ drawBoard drawPlacingCell
   $ cellsToDisplay game
 
-filledCell :: Widget n
-filledCell = str "  "
-emptyCell :: Widget n
-emptyCell  = str "· "
+cellWidget :: Widget n
+cellWidget = str "  "
 
 drawPlacingCell :: VisualCell -> Widget Name
-drawPlacingCell VFree = withAttr emptyCellAttr emptyCell
-drawPlacingCell VFilled = withAttr filledCellAttr filledCell
-drawPlacingCell VCanPlaceFullFigure = withAttr placingCanPlaceFullFigureAttr filledCell
-drawPlacingCell VCanPlaceButNotFullFigure = withAttr placingCanPlaceButNotFullFigure filledCell
-drawPlacingCell VCannotPlace = withAttr placingCannotPlaceAttr filledCell
-drawPlacingCell VWillBeFreed = withAttr placingWillBeFreedAttr filledCell
+drawPlacingCell VFree = withAttr emptyCellAttr cellWidget
+drawPlacingCell VFreeAltStyle = withAttr emptyAltCellAttr cellWidget
+drawPlacingCell VFilled = withAttr filledCellAttr cellWidget
+drawPlacingCell VCanPlaceFullFigure = withAttr placingCanPlaceFullFigureAttr cellWidget
+drawPlacingCell VCanPlaceButNotFullFigure = withAttr placingCanPlaceButNotFullFigure cellWidget
+drawPlacingCell VCannotPlace = withAttr placingCannotPlaceAttr cellWidget
+drawPlacingCell VWillBeFreed = withAttr placingWillBeFreedAttr cellWidget
 
 -- todo unite with 'drawFigure'?
 drawBoard :: (a -> Widget Name) -> Array CellCoord a -> Widget Name
@@ -238,13 +237,14 @@ drawFigureToPlace (Just (FigureToPlace figure CanBePlaced))     = drawSomeFigure
 drawFigureToPlace (Just (FigureToPlace figure CannotBePlaced))  = drawSomeFigureToPlace notSelectedCanNotBePlacedFigureBorderMappings BS.unicodeRounded drawCell $ figure ^. figureInSelection
 
 drawCell :: Cell -> Widget Name
-drawCell Free = withAttr emptyCellAttr $ str "· "
-drawCell Filled = withAttr filledCellAttr $ str "  "
+drawCell Free = withAttr emptyCellAttr cellWidget
+drawCell Filled = withAttr filledCellAttr cellWidget
 
 --- Attributes ---
 
-emptyCellAttr, filledCellAttr, placingCanPlaceFullFigureAttr, placingCanPlaceButNotFullFigure, placingCannotPlaceAttr, placingWillBeFreedAttr, board3x3BorderAttr :: AttrName
+emptyCellAttr, emptyAltCellAttr, filledCellAttr, placingCanPlaceFullFigureAttr, placingCanPlaceButNotFullFigure, placingCannotPlaceAttr, placingWillBeFreedAttr, board3x3BorderAttr :: AttrName
 emptyCellAttr = attrName "emptyCell"
+emptyAltCellAttr = attrName "emptyAltCell"
 filledCellAttr = attrName "filledCell"
 placingCanPlaceFullFigureAttr = attrName "placingCanPlaceFullFigure"
 placingCanPlaceButNotFullFigure = attrName "placingCanPlaceButNotFullFigure"
@@ -259,6 +259,7 @@ theMap :: AttrMap
 theMap = attrMap V.defAttr
   [
     (emptyCellAttr, V.defAttr),
+    (emptyAltCellAttr, bg V.brightWhite),
     (filledCellAttr, V.blue `on` V.blue),
     (placingCanPlaceFullFigureAttr, V.brightBlue `on` V.brightBlue),
     (placingCanPlaceButNotFullFigure, V.magenta `on` V.magenta),
@@ -275,6 +276,7 @@ gameOverMap =
   in
   [
     (emptyCellAttr, V.defAttr),
+    (emptyAltCellAttr, V.defAttr),
     (filledCellAttr, disabled),
     (placingCanPlaceFullFigureAttr, disabled),
     (placingCanPlaceButNotFullFigure, disabled),

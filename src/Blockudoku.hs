@@ -37,10 +37,10 @@ import Control.Lens ( (&), makeLenses, (^.), (%~), (.~), (+~), Lens' )
 import Data.Array ( (//), array, bounds, Array, assocs, listArray, elems )
 import System.Random.Stateful ( globalStdGen, UniformRange(uniformRM) )
 import Control.Monad (replicateM, join)
-import Data.List (find)
+import Data.List (find, sort)
 import Data.Maybe (mapMaybe, isJust, isNothing, catMaybes, listToMaybe, fromMaybe)
 import Linear.V2 (V2(..), _x, _y)
-import MyPrelude ( mapiArray, (!) )
+import MyPrelude ( mapiArray, (!), mapi )
 import qualified Data.Bifunctor
 import System.Random (randomRIO)
 import GHC.Stack (HasCallStack)
@@ -137,27 +137,39 @@ allCellsAreFilled :: HasCallStack => Figure -> [CellCoord] -> Bool
 allCellsAreFilled fig coords =
   coords & fmap (fig !) & all (== Filled)
 
-full9Ranges :: [[CellCoord]]
+data RangeKind =
+  Horizontal |
+  Vertical |
+  Square
+  deriving stock (Show, Eq)
+
+full9Ranges :: [(RangeKind, [CellCoord])]
 full9Ranges = allHorizontal ++ allVertical ++ squares where
-  horizontal r  = fmap (r, ) all9
-  vertical   c  = fmap (, c) all9
+  horizontal r  = (Horizontal, fmap (r, ) all9)
+  vertical   c  = (Vertical, fmap (, c) all9)
   allHorizontal = fmap horizontal all9
   allVertical   = fmap vertical all9
   all9          = [0 .. boardSize - 1]
-  square startRow startColumn = [(startRow + r, startColumn + c) | r <- [0..2], c <- [0..2]]
+  square startRow startColumn = (Square, [(startRow + r, startColumn + c) | r <- [0..2], c <- [0..2]])
   squares       = [square (r * 3) (c * 3) | r <- [0..2], c <- [0..2]]
 
 -- | Finds ranges of cells that will be freed.
-rangesToBeFreed :: Board -> [[CellCoord]]
-rangesToBeFreed fig = filter (allCellsAreFilled fig) full9Ranges
+rangesToBeFreed :: Board -> [(RangeKind, [CellCoord])]
+rangesToBeFreed b = filter (\(_, range) -> allCellsAreFilled b range) full9Ranges
+
+scoreIncrement :: [RangeKind] -> Int
+scoreIncrement ranges = sum $ mapi (\i score -> (i + 1) * score) $ sort $ rangePrice <$> ranges where
+  rangePrice Horizontal = 10
+  rangePrice Vertical = 10
+  rangePrice Square = 20
 
 removeFilledRanges :: Board -> Board
-removeFilledRanges fig = foldl freeAllCells fig $ rangesToBeFreed fig
+removeFilledRanges b = foldl (\b' (_, range) -> freeAllCells b' range) b $ rangesToBeFreed b
 
 possibleFigureStartCoordinates :: Board -> [Coord]
-possibleFigureStartCoordinates fig =
+possibleFigureStartCoordinates b =
   [V2 x y | y <- [0 .. boardSize - figureHeight - 1], x <- [0 .. boardSize - figureWidth - 1]] where
-    (figureHeight, figureWidth) = snd $ bounds fig
+    (figureHeight, figureWidth) = snd $ bounds b
 
 firstPointWhereFigureCanBePlaced :: HasCallStack => Figure -> Board -> Maybe Coord
 firstPointWhereFigureCanBePlaced fig b =
@@ -232,7 +244,7 @@ addPlacingFigure figure figureCoord board =
   where
     placingBoard = boardToPlacingCells board
     boardWithFigure = fromMaybe board $ tryPlaceFigure figure figureCoord board
-    rangesWillBeFreed = join $ rangesToBeFreed boardWithFigure
+    rangesWillBeFreed = snd =<< rangesToBeFreed boardWithFigure
 
     figureCells =
       figure
@@ -659,10 +671,12 @@ possibleActionsImpl game generateAutoPlay = do
                 fmap (, 1, [0 .. figuresToPlaceCount - 1]) $ fmap Just <$> randomFigures
               else
                 pure (figuresWithSelectedPlaced, 0, nextFigureIndices $ figure ^. figureIndex)
+            let scoreIncr = scoreIncrement $ fst <$> rangesToBeFreed newBoard
             let state' =
                   figures .~ newFigures
                   $ board .~ removeFilledRanges newBoard
                   $ turnNumber +~ turnIncrement
+                  $ score +~ scoreIncr
                   $ game ^. currentGame
             let maybeNextFig = tryFindNextFigureToSelect (state' ^. board) newFigures nextIndices
             pure $ case maybeNextFig of

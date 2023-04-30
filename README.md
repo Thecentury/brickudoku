@@ -10,15 +10,16 @@ A terminal interface for Blockudoku game — a hybrid of Sudoku and Tetris.
 
 ### Must have
 
-- [ ] Score system
+- [x] Score system
 - [x] Determine and display game over
-- [ ] Undo system
+- [x] Undo system
 - [x] Highlight 3x3 squares
   - [x] Highlight them with a background of a different color
 - [x] Highlight when blocks would be removed after placing a figure
 - [ ] (Cheating) Highlight regions where a figure can be placed
 - [x] Start placing a figure not from the (0,0) point but from the first where it can be placed
 - [x] Display that a figure cannot be placed at all
+- [ ] Rename (to 'Brickudoku'?)
 - [ ] Better readme
 - [ ] Package and publish (to Hackage?)
 - [ ] Save and restore the state

@@ -1,15 +1,16 @@
 module MyPrelude 
   ( mapArrayItem,
     mapiArray,
-    (!) ) where
+    (!),
+    mapi ) where
 
-import Data.Array ( (//), Array, Ix, assocs, array, bounds )
+import Data.Array ( (//), Array, Ix, assocs, array, bounds, inRange )
 import qualified Data.Array as Array
 import GHC.Stack (HasCallStack)
 
 arrayItem :: HasCallStack => (Show i, Ix i) => Array i a -> i -> a
 arrayItem a i = 
-  if Array.inRange (bounds a) i then
+  if inRange (bounds a) i then
     a Array.! i
   else
     error $ "Index " ++ show i ++ " out of bounds [" ++ show minIndex ++ ", " ++ show maxIndex ++ "]"
@@ -26,3 +27,6 @@ mapArrayItem index f a = a // [(index, f $ a ! index)]
 
 mapiArray :: Ix i => (i -> a -> b) -> Array i a -> Array i b
 mapiArray f a = array (bounds a) . map (\(i, e) -> (i, f i e)) . assocs $ a
+
+mapi :: (Int -> a -> b) -> [a] -> [b]
+mapi f = zipWith f [0..]

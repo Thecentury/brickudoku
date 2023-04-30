@@ -81,6 +81,8 @@ keyBindings =
     (VtyEvent (V.EvKey V.KEsc []), [UserAction CancelPlacingFigure]),
     (VtyEvent (V.EvKey (V.KChar 'R') []), [SystemAction RestartGame]),
     (VtyEvent (V.EvKey (V.KChar 'A') []), [SystemAction ToggleAutoPlay]),
+    (VtyEvent (V.EvKey (V.KChar 'u') []), [SystemAction Undo]),
+    (VtyEvent (V.EvKey (V.KChar 'r') []), [SystemAction Redo]),
     (AppEvent Tick, [SystemAction NextAutoPlayTurn])
   ]
 

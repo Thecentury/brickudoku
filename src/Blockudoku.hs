@@ -44,7 +44,7 @@ import MyPrelude ( mapiArray, (!) )
 import qualified Data.Bifunctor
 import System.Random (randomRIO)
 import GHC.Stack (HasCallStack)
-import Undo (History, newHistory, put, undo, redo, current)
+import Undo (History, newHistory, put, current, tryUndoUntilDifferentL, tryRedoUntilDifferentL)
 
 ----
 
@@ -521,7 +521,9 @@ data UserAction =
 data SystemAction =
   RestartGame |
   NextAutoPlayTurn |
-  ToggleAutoPlay
+  ToggleAutoPlay |
+  Undo |
+  Redo
   deriving stock (Eq, Show)
 
 data Action =
@@ -585,7 +587,9 @@ possibleActionsImpl game generateAutoPlay = do
             startPlacing,
             newGame,
             toggleAutoPlayAction game,
-            autoPlayTurn
+            autoPlayTurn,
+            undoAction game,
+            redoAction game
           ]
 
       moveFigure :: Action -> (FigureIndex -> [FigureIndex]) -> Maybe (Action, Game)
@@ -652,11 +656,28 @@ possibleActionsImpl game generateAutoPlay = do
             newGame,
             toggleAutoPlayAction game,
             autoPlayTurn,
+            undoAction game,
+            redoAction game,
             Just (UserAction CancelPlacingFigure, updateCurrent game $ state .~ SelectingFigure figure)
           ]
     GameOver -> do
       newGame <- restartGameAction
-      pure $ catMaybes [newGame]
+      pure $ catMaybes [
+          newGame,
+          undoAction game
+        ]
+
+undoAction :: Game -> Maybe (Action, Game)
+undoAction game =
+  case game ^. history & tryUndoUntilDifferentL board of
+    Nothing -> Nothing
+    Just history' -> Just (SystemAction Undo, game & history .~ history')
+
+redoAction :: Game -> Maybe (Action, Game)
+redoAction game =
+  case game ^. history & tryRedoUntilDifferentL board of
+    Nothing -> Nothing
+    Just history' -> Just (SystemAction Redo, game & history .~ history')
 
 possibleActions :: Game -> IO [(Action, Game)]
 possibleActions game = possibleActionsImpl game True

@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE RankNTypes #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 module Undo (
     History,
@@ -6,10 +7,16 @@ module Undo (
     put,
     undo,
     redo,
+    tryUndo,
+    tryUndoUntil,
+    tryUndoUntilDifferentL,
+    tryRedo,
+    tryRedoUntil,
+    tryRedoUntilDifferentL,
     current
 ) where
 
-import Control.Lens ( makeLenses )
+import Control.Lens ( makeLenses, (^.), Lens' )
 
 -- | State stacks wrapping states in time
 data History s = History { 
@@ -29,12 +36,45 @@ put :: Eq s => s -> History s -> History s
 put s h | s /= _current h = h { _current = s, _undos = _current h : _undos h, _redos = [] }
 put _ h                  = h
 
+-- todo delete?
 -- | Undo the last state
 undo :: History s -> History s
 undo h@(History _ [] _) = h
 undo (History current_ (u : us) redos_) = History u us (current_ : redos_)
 
+tryUndo :: History s -> Maybe (History s)
+tryUndo (History _ [] _) = Nothing
+tryUndo (History current_ (u : us) redos_) = Just $ History u us (current_ : redos_)
+
+tryUndoUntil :: (s -> s -> Bool) -> History s -> Maybe (History s)
+tryUndoUntil f h = case tryUndo h of
+    Nothing -> Nothing
+    Just h' ->
+      if f (h' ^. current) (h ^. current) then 
+        Just h'
+      else
+        tryUndoUntil f h'
+
+tryUndoUntilDifferentL :: forall s l. Eq l => Lens' s l -> History s -> Maybe (History s)
+tryUndoUntilDifferentL l = tryUndoUntil (\curr prev -> curr ^. l /= prev ^. l)
+
 -- | Redo the last undo
 redo :: History s -> History s
 redo h@(History _ _ []) = h
 redo (History current_ undos_ (r : rs)) = History r (current_ : undos_) rs
+
+tryRedo :: History s -> Maybe (History s)
+tryRedo (History _ _ []) = Nothing
+tryRedo (History current_ undos_ (r : rs)) = Just $ History r (current_ : undos_) rs
+
+tryRedoUntil :: (s -> s -> Bool) -> History s -> Maybe (History s)
+tryRedoUntil f h = case tryRedo h of
+    Nothing -> Nothing
+    Just h' ->
+      if f (h' ^. current) (h ^. current) then 
+        Just h'
+      else
+        tryRedoUntil f h'
+
+tryRedoUntilDifferentL :: forall s l. Eq l => Lens' s l -> History s -> Maybe (History s)
+tryRedoUntilDifferentL l = tryRedoUntil (\curr prev -> curr ^. l /= prev ^. l)

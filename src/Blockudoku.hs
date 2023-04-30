@@ -8,7 +8,7 @@ module Blockudoku
     GameState(..),
     Figure,
     CellCoord,
-    PlacingCell(..),
+    VisualCell(..),
     Cell(..),
     FigureInSelection,
     FigureToPlace(..),
@@ -52,13 +52,13 @@ data Cell =
   Free | Filled
   deriving stock (Show, Eq)
 
-data PlacingCell =
-  PlacingFree |
-  PlacingFilled |
-  PlacingWillBeFreed |
-  PlacingCanPlaceFullFigure |
-  PlacingCanPlaceButNotFullFigure |
-  PlacingCannotPlace
+data VisualCell =
+  VFree |
+  VFilled |
+  VWillBeFreed |
+  VCanPlaceFullFigure |
+  VCanPlaceButNotFullFigure |
+  VCannotPlace
   deriving stock (Show, Eq)
 
 allPlaced :: [Maybe a] -> Bool
@@ -98,7 +98,7 @@ type Figure = Array CellCoord Cell
 
 type Board = Figure
 
-type PlacingCellsFigure = Array CellCoord PlacingCell
+type PlacingCellsFigure = Array CellCoord VisualCell
 
 tryMoveFigure :: Board -> Figure -> Coord -> Coord -> Maybe Coord
 tryMoveFigure board figure coord vector =
@@ -168,11 +168,11 @@ canBePlacedToBoardAtSomePoint fig b =
 
 ----
 
-boardCellToPlacingCell :: Cell -> PlacingCell
-boardCellToPlacingCell Free = PlacingFree
-boardCellToPlacingCell Filled = PlacingFilled
+boardCellToPlacingCell :: Cell -> VisualCell
+boardCellToPlacingCell Free = VFree
+boardCellToPlacingCell Filled = VFilled
 
-boardToPlacingCells :: Board -> Array CellCoord PlacingCell
+boardToPlacingCells :: Board -> Array CellCoord VisualCell
 boardToPlacingCells board =
   board
   & assocs
@@ -216,7 +216,7 @@ addPlacingFigure figure figureCoord board =
       & assocs
       & map (\(coord, cell) -> (newCoord coord, figureCell (newCoord coord) cell))
 
-    toBeFreedCells = (, PlacingWillBeFreed) <$> rangesWillBeFreed
+    toBeFreedCells = (, VWillBeFreed) <$> rangesWillBeFreed
 
     newCoord :: CellCoord -> CellCoord
     newCoord (r, c) = (r + figureCoord^._y, c + figureCoord^._x)
@@ -227,14 +227,14 @@ addPlacingFigure figure figureCoord board =
       & mapMaybe (\(coord, cell) -> if cell == Filled then Just $ newCoord coord else Nothing)
       & all (\coord -> board ! coord == Free)
 
-    figureCell :: CellCoord -> Cell -> PlacingCell
+    figureCell :: CellCoord -> Cell -> VisualCell
     figureCell boardCoord figCell =
       case (board ! boardCoord, figCell, canPlaceFullFigure) of
-        (Filled, Filled, _) -> PlacingCannotPlace
-        (Filled, Free, _) -> PlacingFilled
-        (Free, Filled, True) -> PlacingCanPlaceFullFigure
-        (Free, Filled, False) -> PlacingCanPlaceButNotFullFigure
-        (Free, Free, _) -> PlacingFree
+        (Filled, Filled, _) -> VCannotPlace
+        (Filled, Free, _) -> VFilled
+        (Free, Filled, True) -> VCanPlaceFullFigure
+        (Free, Filled, False) -> VCanPlaceButNotFullFigure
+        (Free, Free, _) -> VFree
 
 type FigureIndex = Int
 

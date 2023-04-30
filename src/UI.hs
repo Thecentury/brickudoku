@@ -8,7 +8,7 @@ import Blockudoku
       GameState(..),
       Figure,
       CellCoord,
-      PlacingCell(..),
+      VisualCell(..),
       Cell(..),
       cellsToDisplay,
       UserAction(..),
@@ -102,7 +102,6 @@ handleEvent evt = do
           _ -> error $ "Multiple applicable actions for key " ++ show evt ++ ": " ++ show (fmap fst actionsToApply)
     Nothing -> pure ()
 
--- todo display whether an auto play is enabled
 drawUI :: Game -> [Widget Name]
 drawUI game =
   [
@@ -184,21 +183,19 @@ filledCell = str "  "
 emptyCell :: Widget n
 emptyCell  = str "· "
 
-drawPlacingCell :: PlacingCell -> Widget Name
-drawPlacingCell PlacingFree = withAttr emptyCellAttr emptyCell
-drawPlacingCell PlacingFilled = withAttr filledCellAttr filledCell
-drawPlacingCell PlacingCanPlaceFullFigure = withAttr placingCanPlaceFullFigureAttr filledCell
-drawPlacingCell PlacingCanPlaceButNotFullFigure = withAttr placingCanPlaceButNotFullFigure filledCell
-drawPlacingCell PlacingCannotPlace = withAttr placingCannotPlaceAttr filledCell
-drawPlacingCell PlacingWillBeFreed = withAttr placingWillBeFreedAttr filledCell
+drawPlacingCell :: VisualCell -> Widget Name
+drawPlacingCell VFree = withAttr emptyCellAttr emptyCell
+drawPlacingCell VFilled = withAttr filledCellAttr filledCell
+drawPlacingCell VCanPlaceFullFigure = withAttr placingCanPlaceFullFigureAttr filledCell
+drawPlacingCell VCanPlaceButNotFullFigure = withAttr placingCanPlaceButNotFullFigure filledCell
+drawPlacingCell VCannotPlace = withAttr placingCannotPlaceAttr filledCell
+drawPlacingCell VWillBeFreed = withAttr placingWillBeFreedAttr filledCell
 
+-- todo unite with 'drawFigure'?
 drawBoard :: (a -> Widget Name) -> Array CellCoord a -> Widget Name
-drawBoard drawOneCell figure = vBox allRows where
-  cellRows = hBox . intercalate [verticalBar] . chunksOf 3 . map drawOneCell <$> figureRows figure
-  horizontalRow = withAttr board3x3BorderAttr $ hBox $ intercalate [str "┼"] $ chunksOf (2 * 3) $ replicate (2 * boardSize) $ str "─"
-  verticalBar = withAttr board3x3BorderAttr $ str "│"
-  allRows = intercalate [horizontalRow] $ chunksOf 3 cellRows
-
+drawBoard drawOneCell figure = vBox cellRows where
+  cellRows = hBox . map drawOneCell <$> figureRows figure
+  
 drawFigure :: (a -> Widget Name) -> Array CellCoord a -> Widget Name
 drawFigure drawOneCell figure = vBox cellRows where
   cellRows = hBox . map drawOneCell <$> figureRows figure

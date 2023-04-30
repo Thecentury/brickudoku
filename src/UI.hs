@@ -119,7 +119,7 @@ drawUI game =
       padLeft (Pad 2)
       $ vBox [
         drawScore game,
-        padTop (Pad 2) helpWidget
+        padTop (Pad 3) helpWidget
       ]
     
     figuresToPlaceWidgets =
@@ -172,9 +172,10 @@ drawUI game =
 
 drawScore :: Game -> Widget Name
 drawScore game =
-  hLimit 9
+  padTop (Pad 1)
+  $ hLimit 9
   $ withBorderStyle BS.unicodeRounded
-  $ B.borderWithLabel (str "Score")
+  $ B.borderWithLabel (str " Score ")
   $ C.hCenter
   $ padAll 1
   $ str $ show $ game ^. currentGame . score
@@ -188,15 +189,16 @@ helpWidget =
     helpLines :: [Widget Name]
     helpLines =
       [
-        str "Move figure: ←, →, ↑, ↓",
-        str "Place figure: Enter",
-        str "Cancel placing figure: Esc",
-        str "Restart game: Shift + R",
-        str "Toggle auto-play: Shift + A",
-        str "Undo: U",
-        str "Redo: R",
-        str "Quit: Shift + Q"
+        str "Move figure: . . . . . " <+> key "←" <+> str ", " <+> key "→" <+> str ", " <+> key "↑" <+> str ", " <+> key "↓",
+        str "Place figure: . . . .  " <+> key "Enter",
+        str "Cancel placing figure: " <+> key "Esc",
+        str "Restart game: . . . .  " <+> key "Shift" <+> str " + " <+> key "R",
+        str "Toggle auto-play: . .  " <+> key "Shift" <+> str " + " <+> key "A",
+        str "Undo: . . . . . . . .  " <+> key "U",
+        str "Redo: . . . . . . . .  " <+> key "R",
+        str "Quit: . . . . . . . .  " <+> key "Shift" <+> str " + " <+> key "Q"
       ]
+    key k = withAttr helpShortcutAttr $ str k
 
 drawGrid :: Game -> Widget Name
 drawGrid game =
@@ -271,8 +273,9 @@ drawCell Filled = withAttr filledCellAttr cellWidget
 
 --- Attributes ---
 
-emptyCellAttr, emptyAltCellAttr, filledCellAttr, placingCanPlaceFullFigureAttr, placingCanPlaceButNotFullFigure, 
-  placingCannotPlaceAttr, placingWillBeFreedAttr, board3x3BorderAttr :: AttrName
+emptyCellAttr, emptyAltCellAttr, filledCellAttr, placingCanPlaceFullFigureAttr, 
+  placingCanPlaceButNotFullFigure, placingCannotPlaceAttr, placingWillBeFreedAttr,
+  board3x3BorderAttr, helpShortcutAttr :: AttrName
 emptyCellAttr = attrName "emptyCell"
 emptyAltCellAttr = attrName "emptyAltCell"
 filledCellAttr = attrName "filledCell"
@@ -281,6 +284,7 @@ placingCanPlaceButNotFullFigure = attrName "placingCanPlaceButNotFullFigure"
 placingCannotPlaceAttr = attrName "placingCannotPlace"
 placingWillBeFreedAttr = attrName "placingWillBeFreed"
 board3x3BorderAttr = attrName "board3x3Border"
+helpShortcutAttr = attrName "helpShortcut"
 
 gameOverAttr :: AttrName
 gameOverAttr = attrName "gameOver"
@@ -296,7 +300,8 @@ theMap = attrMap V.defAttr
     (placingCannotPlaceAttr, V.yellow `on` V.yellow),
     (placingWillBeFreedAttr, V.green `on` V.green),
     (board3x3BorderAttr, fg V.white),
-    (gameOverAttr, fg V.red)
+    (gameOverAttr, fg V.red),
+    (helpShortcutAttr, fg V.blue)
   ]
 
 gameOverMap :: [(AttrName, V.Attr)]
@@ -313,7 +318,8 @@ gameOverMap =
     (placingCannotPlaceAttr, disabled),
     (placingWillBeFreedAttr, disabled),
     (board3x3BorderAttr, disabled),
-    (gameOverAttr, fg V.brightRed)
+    (gameOverAttr, fg V.brightRed),
+    (helpShortcutAttr, fg V.brightBlack)
   ]
 
 --- Main ---

@@ -106,7 +106,7 @@ drawUI :: Game -> [Widget Name]
 drawUI game =
   [
     gameOverWidget,
-    C.center (centralColumn <+> padLeft (Pad 2) (drawScore game))
+    C.center (centralColumn <+> padLeft (Pad 2) rightColumn)
   ] where
     centralColumn =
       wrapWithAutoPlayBorder
@@ -114,6 +114,14 @@ drawUI game =
       $ C.hCenter (str $ "Turn: " ++ show (game ^. currentGame . turnNumber))
       <=> C.hCenter (withPlacingFigureBorder $ drawGrid game)
       <=> padTop (Pad 1) figuresToPlaceWidgets
+
+    rightColumn =
+      padLeft (Pad 2)
+      $ vBox [
+        drawScore game,
+        padTop (Pad 2) helpWidget
+      ]
+    
     figuresToPlaceWidgets =
       C.hCenter
       $ withBorderStyle BS.unicodeRounded
@@ -121,11 +129,13 @@ drawUI game =
       $ hBox
       $ map (vLimit 6 . C.vCenter . drawFigureToPlace) 
       $ figuresToPlace game
+    
     applyGameOverPalette widget =
       if isGameOver game then
         updateAttrMap (A.applyAttrMappings gameOverMap) widget
       else
         widget
+    
     gameOverWidget = 
       if isGameOver game then
         C.centerLayer 
@@ -168,6 +178,25 @@ drawScore game =
   $ C.hCenter
   $ padAll 1
   $ str $ show $ game ^. currentGame . score
+
+helpWidget :: Widget Name
+helpWidget =
+  withBorderStyle BS.unicodeRounded
+  $ B.borderWithLabel (str " Help ")
+  $ padAll 1
+  $ vBox helpLines where
+    helpLines :: [Widget Name]
+    helpLines =
+      [
+        str "Move figure: ←, →, ↑, ↓",
+        str "Place figure: Enter",
+        str "Cancel placing figure: Esc",
+        str "Restart game: Shift + R",
+        str "Toggle auto-play: Shift + A",
+        str "Undo: U",
+        str "Redo: R",
+        str "Quit: Shift + Q"
+      ]
 
 drawGrid :: Game -> Widget Name
 drawGrid game =
@@ -242,7 +271,8 @@ drawCell Filled = withAttr filledCellAttr cellWidget
 
 --- Attributes ---
 
-emptyCellAttr, emptyAltCellAttr, filledCellAttr, placingCanPlaceFullFigureAttr, placingCanPlaceButNotFullFigure, placingCannotPlaceAttr, placingWillBeFreedAttr, board3x3BorderAttr :: AttrName
+emptyCellAttr, emptyAltCellAttr, filledCellAttr, placingCanPlaceFullFigureAttr, placingCanPlaceButNotFullFigure, 
+  placingCannotPlaceAttr, placingWillBeFreedAttr, board3x3BorderAttr :: AttrName
 emptyCellAttr = attrName "emptyCell"
 emptyAltCellAttr = attrName "emptyAltCell"
 filledCellAttr = attrName "filledCell"

@@ -5,8 +5,6 @@ module Undo (
     History,
     newHistory,
     put,
-    undo,
-    redo,
     tryUndo,
     tryUndoUntil,
     tryUndoUntilDifferentL,
@@ -36,12 +34,6 @@ put :: Eq s => s -> History s -> History s
 put s h | s /= _current h = h { _current = s, _undos = _current h : _undos h, _redos = [] }
 put _ h                  = h
 
--- todo delete?
--- | Undo the last state
-undo :: History s -> History s
-undo h@(History _ [] _) = h
-undo (History current_ (u : us) redos_) = History u us (current_ : redos_)
-
 tryUndo :: History s -> Maybe (History s)
 tryUndo (History _ [] _) = Nothing
 tryUndo (History current_ (u : us) redos_) = Just $ History u us (current_ : redos_)
@@ -57,11 +49,6 @@ tryUndoUntil f h = case tryUndo h of
 
 tryUndoUntilDifferentL :: forall s l. Eq l => Lens' s l -> History s -> Maybe (History s)
 tryUndoUntilDifferentL l = tryUndoUntil (\curr prev -> curr ^. l /= prev ^. l)
-
--- | Redo the last undo
-redo :: History s -> History s
-redo h@(History _ _ []) = h
-redo (History current_ undos_ (r : rs)) = History r (current_ : undos_) rs
 
 tryRedo :: History s -> Maybe (History s)
 tryRedo (History _ _ []) = Nothing

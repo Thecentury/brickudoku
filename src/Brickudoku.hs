@@ -96,6 +96,9 @@ type CellCoord = (Int, Int)
 coordToCellCoord :: Coord -> CellCoord
 coordToCellCoord (V2 x y) = (y, x)
 
+cellCoordToCoord :: CellCoord -> Coord
+cellCoordToCoord (y, x) = V2 x y
+
 row :: CellCoord -> Int
 row = fst
 
@@ -103,6 +106,10 @@ col :: CellCoord -> Int
 col = snd
 
 type Figure = Array CellCoord Cell
+
+figureCellCoords :: Figure -> [CellCoord]
+figureCellCoords fig =
+  fmap fst $ filter (\(_, e) -> e == Filled) . assocs $ fig
 
 type Board = Figure
 
@@ -228,10 +235,7 @@ markFigureAsPlaced figureInSelection figures =
 tryPlaceFigure :: HasCallStack => Figure -> Coord -> Board -> Maybe Figure
 tryPlaceFigure figure figureCoord board =
   let
-    figureCells =
-      figure
-      & assocs
-      & mapMaybe (\(coord, cell) -> if cell == Filled then Just $ newCoord coord else Nothing)
+    figureCells = newCoord <$> figureCellCoords figure
   in
     tryPlace board figureCells
   where
@@ -263,11 +267,7 @@ addPlacingFigure figure figureCoord board =
     newCoord :: CellCoord -> CellCoord
     newCoord (r, c) = (r + figureCoord^._y, c + figureCoord^._x)
 
-    canPlaceFullFigure =
-      figure
-      & assocs
-      & mapMaybe (\(coord, cell) -> if cell == Filled then Just $ newCoord coord else Nothing)
-      & all (\coord -> board ! coord == Free)
+    canPlaceFullFigure = all (\coord -> board ! coord == Free) $ newCoord <$> figureCellCoords figure
 
     figureCell :: CellCoord -> Cell -> VisualCell
     figureCell boardCoord figCell =
@@ -364,7 +364,8 @@ mergeCellHelpingHighlight existing _         = existing
 addHelpHighlightForFigure :: Board -> Figure -> Array CellCoord VisualCell -> Array CellCoord VisualCell
 addHelpHighlightForFigure b fig cells =
   cells // cellsToUpdate where
-    canBePlaced = pointsWhereFigureCanBePlaced fig b
+    figureCoords = cellCoordToCoord <$> figureCellCoords fig
+    canBePlaced = concatMap (\coord -> (+ coord) <$> figureCoords) $ pointsWhereFigureCanBePlaced fig b
     currentCells = (\coord -> (coord, cells ! coord)) . coordToCellCoord <$> canBePlaced
     cellsToUpdate = (\(coord, curr) -> (coord, mergeCellHelpingHighlight curr $ VCanBePlacedHint PrimaryStyle)) <$> currentCells
 
@@ -379,15 +380,12 @@ addHelpHighlight (Game (History (VersionedState _ b _ (PlacingFigure (FigureInSe
 cellsToDisplay :: Game -> PlacingCellsFigure
 cellsToDisplay game = case game ^. currentGame . state of
   PlacingFigure figure coord -> 
-    addHelpHighlight game
-    $ addAltStyleCells
-    $ addPlacingFigure (figure ^. figureInSelection) coord 
-    $ game ^. currentGame . board
-  _ -> 
-    addHelpHighlight game
-    $ addAltStyleCells 
-    $ boardToPlacingCells 
-    $ game ^. currentGame . board
+    wrap $ addPlacingFigure (figure ^. figureInSelection) coord brd
+  _ ->
+    wrap $ boardToPlacingCells brd
+  where
+    wrap cells = addHelpHighlight game $ addAltStyleCells $ cells
+    brd = game ^. currentGame . board
 
 figuresToPlace :: Game -> [Maybe (FigureToPlace FigureInSelection)]
 figuresToPlace game =

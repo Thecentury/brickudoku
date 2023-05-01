@@ -38,7 +38,7 @@ import Control.Lens ( (&), makeLenses, (^.), (%~), (.~), (+~), Lens' )
 import Data.Array ( (//), array, bounds, Array, assocs, listArray, elems )
 import System.Random.Stateful ( globalStdGen, UniformRange(uniformRM) )
 import Control.Monad (replicateM, join)
-import Data.List (find, sort)
+import Data.List (find, sort, sortOn)
 import Data.Maybe (mapMaybe, isNothing, catMaybes, listToMaybe, fromMaybe)
 import Linear.V2 (V2(..), _x, _y)
 import MyPrelude ( mapiArray, (!), mapi )
@@ -262,6 +262,7 @@ addPlacingFigure figure figureCoord board =
     figureCells =
       figure
       & assocs
+      & filter (\(_, cell) -> cell == Filled)
       & map (\(coord, cell) -> (newCoord coord, figureCell (newCoord coord) cell))
 
     toBeFreedCells = (, VWillBeFreed) <$> rangesWillBeFreed
@@ -372,7 +373,7 @@ addHelpHighlightForFigure b fig cells =
         canBePlaced
     -- Here single coordinate can occur multiple times, need to merge the cells
     cellsToUpdate =
-      (\(startCoord, coord, curr) -> (coord, mergeCellHelpingHighlight curr $ VCanBePlacedHint PrimaryStyle (placementResult startCoord))) 
+      (\(startCoord, coord, boardCell) -> (coord, mergeCellHelpingHighlight boardCell $ VCanBePlacedHint PrimaryStyle (placementResult startCoord))) 
       <$> currentCells
     mergedCellsToUpdate =
       -- Drop the grouping key (coord)
@@ -380,7 +381,7 @@ addHelpHighlightForFigure b fig cells =
       -- Here we use that 'JustFigure' < 'Region'. For each list of cells with the same coord use max of them.
       $ Data.Bifunctor.second maximum
       -- Convert to [(Coord, [(Coord, VisualCell)])]
-      <$> groupOnKey fst cellsToUpdate
+      <$> groupOnKey fst (sortOn fst cellsToUpdate)
     placementResult :: HasCallStack => Coord -> HintPlacementResult
     placementResult coord =
       case tryPlaceFigure fig coord b of

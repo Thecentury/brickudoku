@@ -34,8 +34,6 @@ Run the game by simply executing the `brickudoku` command.
 
 ### Must have
 
-- [ ] (Cheating) Highlight regions where a figure can be placed
-- [ ] Video of the gameplay in the readme
 - [ ] Package and publish (to Hackage?)
 - [ ] Save and restore the state
 

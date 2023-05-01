@@ -6,7 +6,9 @@
 
 A terminal interface for Brickudoku game — a hybrid of Sudoku and Tetris.
 
-<video src="https://github.com/thecentury/brickudoku/raw/master/docs/img/brickudoku.mp4" width=923 autoplay controls loop></video>
+<video width=923 autoplay controls loop>
+  <source src="https://github.com/thecentury/brickudoku/raw/master/docs/img/brickudoku.mp4" type="video/mp4" />
+</video>
 
 Built on top of the [brick](https://github.com/jtdaugherty/brick) library which makes building terminal user interfaces very accessible. Sam Tay also has a nice [tutorial](https://samtay.github.io/posts/introduction-to-brick) that can help you get started.
 

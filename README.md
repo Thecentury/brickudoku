@@ -1,7 +1,7 @@
 # Brickudoku [![Build Status](https://github.com/thecentury/brickudoku/actions/workflows/haskell-ci.yml/badge.svg)](https://github.com/thecentury/brickudoku/actions/workflows/haskell-ci.yml)
 
-[![Hackage](https://img.shields.io/hackage/v/haskell-brickudoku.svg?logo=haskell)](https://hackage.haskell.org/package/haskell-brickudoku)
-[![Stackage Lts](http://stackage.org/package/haskell-brickudoku/badge/lts)](http://stackage.org/lts/package/haskell-brickudoku)
+[![Hackage](https://img.shields.io/hackage/v/brickudoku.svg?logo=haskell)](https://hackage.haskell.org/package/brickudoku)
+[![Stackage Lts](http://stackage.org/package/brickudoku/badge/lts)](http://stackage.org/lts/package/brickudoku)
 [![MIT license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 A terminal interface for Brickudoku game — a hybrid of Sudoku and Tetris.

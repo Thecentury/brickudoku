@@ -6,6 +6,8 @@
 
 A terminal interface for Brickudoku game — a hybrid of Sudoku and Tetris.
 
+<video src="https://github.com/thecentury/brickudoku/raw/master/docs/img/brickudoku.mp4" width=923 autoplay controls loop></video>
+
 Built on top of the [brick](https://github.com/jtdaugherty/brick) library which makes building terminal user interfaces very accessible. Sam Tay also has a nice [tutorial](https://samtay.github.io/posts/introduction-to-brick) that can help you get started.
 
 ## Installlation
@@ -24,7 +26,7 @@ stack install brickudoku
 brickudoku
 ```
 
-Windows support is unfortunately questionable.
+Windows support is unfortunately questionable, but you can try building it in [WSL](https://learn.microsoft.com/en-us/windows/wsl/install).
 
 ## Usage
 

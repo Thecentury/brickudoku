@@ -220,6 +220,7 @@ drawPlacingCell VCanPlaceFullFigure = withAttr placingCanPlaceFullFigureAttr cel
 drawPlacingCell VCanPlaceButNotFullFigure = withAttr placingCanPlaceButNotFullFigure cellWidget
 drawPlacingCell VCannotPlace = withAttr placingCannotPlaceAttr cellWidget
 drawPlacingCell VWillBeFreed = withAttr placingWillBeFreedAttr cellWidget
+drawPlacingCell VCanBePlaced = withAttr canBePlacedHintAttr cellWidget
 
 drawFigure :: (a -> Widget Name) -> Array CellCoord a -> Widget Name
 drawFigure drawOneCell figure = vBox cellRows where
@@ -270,7 +271,7 @@ drawCell Filled = withAttr filledCellAttr cellWidget
 
 emptyCellAttr, emptyAltCellAttr, filledCellAttr, placingCanPlaceFullFigureAttr, 
   placingCanPlaceButNotFullFigure, placingCannotPlaceAttr, placingWillBeFreedAttr,
-  board3x3BorderAttr, helpShortcutAttr :: AttrName
+  board3x3BorderAttr, canBePlacedHintAttr, helpShortcutAttr :: AttrName
 emptyCellAttr = attrName "emptyCell"
 emptyAltCellAttr = attrName "emptyAltCell"
 filledCellAttr = attrName "filledCell"
@@ -279,6 +280,7 @@ placingCanPlaceButNotFullFigure = attrName "placingCanPlaceButNotFullFigure"
 placingCannotPlaceAttr = attrName "placingCannotPlace"
 placingWillBeFreedAttr = attrName "placingWillBeFreed"
 board3x3BorderAttr = attrName "board3x3Border"
+canBePlacedHintAttr = attrName "canBePlacedHint"
 helpShortcutAttr = attrName "helpShortcut"
 
 gameOverAttr :: AttrName
@@ -295,6 +297,7 @@ theMap = attrMap V.defAttr
     (placingCannotPlaceAttr, V.yellow `on` V.yellow),
     (placingWillBeFreedAttr, V.green `on` V.green),
     (board3x3BorderAttr, fg V.white),
+    (canBePlacedHintAttr, V.green `on` V.green),
     (gameOverAttr, fg V.red),
     (helpShortcutAttr, fg V.blue)
   ]
@@ -313,6 +316,7 @@ gameOverMap =
     (placingCannotPlaceAttr, disabled),
     (placingWillBeFreedAttr, disabled),
     (board3x3BorderAttr, disabled),
+    (canBePlacedHintAttr, disabled),
     (gameOverAttr, fg V.brightRed),
     (helpShortcutAttr, fg V.brightBlack)
   ]

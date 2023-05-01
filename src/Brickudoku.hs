@@ -38,13 +38,13 @@ import Data.Array ( (//), array, bounds, Array, assocs, listArray, elems )
 import System.Random.Stateful ( globalStdGen, UniformRange(uniformRM) )
 import Control.Monad (replicateM, join)
 import Data.List (find, sort)
-import Data.Maybe (mapMaybe, isJust, isNothing, catMaybes, listToMaybe, fromMaybe)
+import Data.Maybe (mapMaybe, isNothing, catMaybes, listToMaybe, fromMaybe)
 import Linear.V2 (V2(..), _x, _y)
 import MyPrelude ( mapiArray, (!), mapi )
 import qualified Data.Bifunctor
 import System.Random (randomRIO)
 import GHC.Stack (HasCallStack)
-import Undo (History, newHistory, put, current, tryUndoUntilDifferentL, tryRedoUntilDifferentL)
+import Undo (History(..), newHistory, put, current, tryUndoUntilDifferentL, tryRedoUntilDifferentL)
 
 ----
 
@@ -59,7 +59,8 @@ data VisualCell =
   VWillBeFreed |
   VCanPlaceFullFigure |
   VCanPlaceButNotFullFigure |
-  VCannotPlace
+  VCannotPlace |
+  VCanBePlaced -- todo add different highlight for points where placing a figure will cause freeing some regions
   deriving stock (Show, Eq)
 
 allPlaced :: [Maybe a] -> Bool
@@ -82,12 +83,15 @@ vectorLeft :: Coord
 vectorLeft = V2 (-1) 0
 
 vectorRight :: Coord
-vectorRight = V2 1 0 
+vectorRight = V2 1 0
 
 ---
 
 -- todo use some V2 type from other brick applications?
 type CellCoord = (Int, Int)
+
+coordToCellCoord :: Coord -> CellCoord
+coordToCellCoord (V2 x y) = (y, x)
 
 row :: CellCoord -> Int
 row = fst
@@ -171,13 +175,13 @@ possibleFigureStartCoordinates b =
   [V2 x y | y <- [0 .. boardSize - figureHeight - 1], x <- [0 .. boardSize - figureWidth - 1]] where
     (figureHeight, figureWidth) = snd $ bounds b
 
-firstPointWhereFigureCanBePlaced :: HasCallStack => Figure -> Board -> Maybe Coord
-firstPointWhereFigureCanBePlaced fig b =
-  listToMaybe $ mapMaybe (\coord -> coord <$ tryPlaceFigure fig coord b) (possibleFigureStartCoordinates fig)
+pointsWhereFigureCanBePlaced :: HasCallStack => Figure -> Board -> [Coord]
+pointsWhereFigureCanBePlaced fig b =
+  mapMaybe (\coord -> coord <$ tryPlaceFigure fig coord b) $ possibleFigureStartCoordinates fig
 
 canBePlacedToBoardAtSomePoint :: HasCallStack => Figure -> Board -> Bool
 canBePlacedToBoardAtSomePoint fig b =
-  isJust $ firstPointWhereFigureCanBePlaced fig b
+  not . null $ pointsWhereFigureCanBePlaced fig b
 
 ----
 
@@ -319,7 +323,8 @@ makeLenses ''VersionedState
 
 data Game = Game
   { _history :: History VersionedState,
-    _autoPlay :: Bool }
+    _autoPlay :: Bool,
+    _easyMode :: Bool }
   deriving stock (Show)
 
 makeLenses ''Game
@@ -349,14 +354,35 @@ isPlacingFigure game = case game ^. currentGame . state of
   PlacingFigure _ _ -> True
   _ -> False
 
+mergeCellHelpingHighlight :: VisualCell -> VisualCell -> VisualCell
+mergeCellHelpingHighlight VFree VCanBePlaced = VCanBePlaced
+mergeCellHelpingHighlight existing _         = existing
+
+addHelpHighlightForFigure :: Board -> Figure -> Array CellCoord VisualCell -> Array CellCoord VisualCell
+addHelpHighlightForFigure b fig cells =
+  cells // cellsToUpdate where
+    canBePlaced = pointsWhereFigureCanBePlaced fig b
+    currentCells = (\coord -> (coord, cells ! coord)) . coordToCellCoord <$> canBePlaced
+    cellsToUpdate = (\(coord, curr) -> (coord, mergeCellHelpingHighlight curr VCanBePlaced)) <$> currentCells
+
+addHelpHighlight :: Game -> Array CellCoord VisualCell -> Array CellCoord VisualCell
+addHelpHighlight g cells | g ^. easyMode == False = cells
+addHelpHighlight (Game (History (VersionedState _ _ _ GameOver _) _ _) _ _) cells = cells
+addHelpHighlight (Game (History (VersionedState _ b _ (SelectingFigure (FigureInSelection fig _)) _) _ _) _ _) cells =
+  addHelpHighlightForFigure b fig cells
+addHelpHighlight (Game (History (VersionedState _ b _ (PlacingFigure (FigureInSelection fig _) _) _) _ _) _ _) cells =
+  addHelpHighlightForFigure b fig cells
+
 cellsToDisplay :: Game -> PlacingCellsFigure
 cellsToDisplay game = case game ^. currentGame . state of
   PlacingFigure figure coord -> 
-    addAltStyleCells 
+    addHelpHighlight game
+    $ addAltStyleCells
     $ addPlacingFigure (figure ^. figureInSelection) coord 
     $ game ^. currentGame . board
   _ -> 
-    addAltStyleCells 
+    addHelpHighlight game
+    $ addAltStyleCells 
     $ boardToPlacingCells 
     $ game ^. currentGame . board
 
@@ -514,7 +540,8 @@ initGame = do
           _turnNumber = 1 }
   let game = Game 
         { _history = newHistory coreGame,
-          _autoPlay = False }
+          _autoPlay = False,
+          _easyMode = False }
   return game
 
 rowCells :: HasCallStack => Int -> Array CellCoord a -> [a]
@@ -646,7 +673,7 @@ possibleActionsImpl game generateAutoPlay = do
         pure (action, game')
 
       startPlacing = do
-        let coord = fromMaybe zeroCoord $ firstPointWhereFigureCanBePlaced (figure ^. figureInSelection) (game ^. currentGame . board)
+        let coord = fromMaybe zeroCoord $ listToMaybe $ pointsWhereFigureCanBePlaced (figure ^. figureInSelection) (game ^. currentGame . board)
         let game' = updateCurrentNotVersioned game $ state .~ PlacingFigure figure coord
         pure (UserAction StartPlacingFigure, game')
 

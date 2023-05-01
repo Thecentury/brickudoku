@@ -2,7 +2,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 module Undo (
-    History,
+    History(..),
     newHistory,
     put,
     tryUndo,

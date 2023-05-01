@@ -42,3 +42,4 @@ Run the game by simply executing the `brickudoku` command.
 ### Nice to have
 
 - [ ] Mouse support
+- [ ] Store the RNG in the game state

@@ -206,7 +206,7 @@ drawGrid game =
   $ joinBorders
   $ B.border
   $ padAll 0
-  $ drawBoard drawPlacingCell
+  $ drawFigure drawPlacingCell
   $ cellsToDisplay game
 
 cellWidget :: Widget n
@@ -221,11 +221,6 @@ drawPlacingCell VCanPlaceButNotFullFigure = withAttr placingCanPlaceButNotFullFi
 drawPlacingCell VCannotPlace = withAttr placingCannotPlaceAttr cellWidget
 drawPlacingCell VWillBeFreed = withAttr placingWillBeFreedAttr cellWidget
 
--- todo unite with 'drawFigure'?
-drawBoard :: (a -> Widget Name) -> Array CellCoord a -> Widget Name
-drawBoard drawOneCell figure = vBox cellRows where
-  cellRows = hBox . map drawOneCell <$> figureRows figure
-  
 drawFigure :: (a -> Widget Name) -> Array CellCoord a -> Widget Name
 drawFigure drawOneCell figure = vBox cellRows where
   cellRows = hBox . map drawOneCell <$> figureRows figure

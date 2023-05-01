@@ -5,5 +5,4 @@ extra-deps:
   - primitive-0.8.0.0
   - vty-5.38
   - brick-1.7
-  # todo is it needed?
   - text-zipper-0.13

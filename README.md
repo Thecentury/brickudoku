@@ -16,7 +16,12 @@ First [get stack](https://docs.haskellstack.org/en/stable/#how-to-install). Then
 ```bash
 git clone https://github.com/Thecentury/brickudoku.git
 cd brickudoku
+stack build
+# run using stack
+stack run
+# alternatively, copy the executable to ~/.local/bin
 stack install brickudoku
+brickudoku
 ```
 
 Windows support is unfortunately questionable.

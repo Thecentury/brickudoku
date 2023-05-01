@@ -134,12 +134,12 @@ jobs:
           find sdist -maxdepth 1 -type f -name '*.tar.gz' -exec tar -C $GITHUB_WORKSPACE/unpacked -xzvf {} \;
       - name: generate cabal.project
         run: |
-          PKGDIR_haskell_brickudoku="$(find "$GITHUB_WORKSPACE/unpacked" -maxdepth 1 -type d -regex '.*/haskell-brickudoku-[0-9.]*')"
-          echo "PKGDIR_haskell_brickudoku=${PKGDIR_haskell_brickudoku}" >> "$GITHUB_ENV"
+          PKGDIR_brickudoku="$(find "$GITHUB_WORKSPACE/unpacked" -maxdepth 1 -type d -regex '.*/haskell-brickudoku-[0-9.]*')"
+          echo "PKGDIR_brickudoku=${PKGDIR_brickudoku}" >> "$GITHUB_ENV"
           rm -f cabal.project cabal.project.local
           touch cabal.project
           touch cabal.project.local
-          echo "packages: ${PKGDIR_haskell_brickudoku}" >> cabal.project
+          echo "packages: ${PKGDIR_brickudoku}" >> cabal.project
           echo "package haskell-brickudoku" >> cabal.project
           echo "    ghc-options: -Werror=missing-methods" >> cabal.project
           cat >> cabal.project <<EOF
@@ -172,7 +172,7 @@ jobs:
           $CABAL v2-test $ARG_COMPILER $ARG_TESTS $ARG_BENCH all --test-show-details=direct
       # - name: cabal check
       #   run: |
-      #     cd ${PKGDIR_haskell_brickudoku} || false
+      #     cd ${PKGDIR_brickudoku} || false
       #     ${CABAL} -vnormal check
       - name: haddock
         run: |

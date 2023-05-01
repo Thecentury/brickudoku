@@ -14,6 +14,7 @@ module Brickudoku
     FigureInSelection(..),
     FigureToPlace(..),
     FigureToPlaceKind(..),
+    HintPlacementResult(..),
     cellsToDisplay,
     isGameOver,
     isPlacingFigure,
@@ -55,6 +56,9 @@ data Cell =
 data FreeStyle = PrimaryStyle | AltStyle
   deriving stock (Show, Eq)
 
+data HintPlacementResult = JustFigure | Region
+  deriving stock (Show, Eq)
+
 data VisualCell =
   VFree FreeStyle |
   VFilled |
@@ -62,7 +66,7 @@ data VisualCell =
   VCanPlaceFullFigure |
   VCanPlaceButNotFullFigure |
   VCannotPlace |
-  VCanBePlacedHint FreeStyle -- todo add different highlight for points where placing a figure will cause freeing some regions
+  VCanBePlacedHint FreeStyle HintPlacementResult -- todo add different highlight for points where placing a figure will cause freeing some regions
   deriving stock (Show, Eq)
 
 allPlaced :: [Maybe a] -> Bool
@@ -238,7 +242,7 @@ tryPlaceFigure figure figureCoord board =
     tryPlace board figureCells
   where
     newCoord :: CellCoord -> CellCoord
-    newCoord (r, c) = (r + figureCoord^._y, c + figureCoord^._x)
+    newCoord (r, c) = (r + figureCoord ^. _y, c + figureCoord ^. _x)
 
     tryPlace :: Figure -> [CellCoord] -> Maybe Figure
     tryPlace b [] = Just b
@@ -354,16 +358,28 @@ isPlacingFigure game = case game ^. currentGame . state of
   _ -> False
 
 mergeCellHelpingHighlight :: VisualCell -> VisualCell -> VisualCell
-mergeCellHelpingHighlight (VFree style) (VCanBePlacedHint _) = VCanBePlacedHint style
-mergeCellHelpingHighlight existing _         = existing
+mergeCellHelpingHighlight (VFree style) (VCanBePlacedHint _ result) = VCanBePlacedHint style result
+mergeCellHelpingHighlight existing _ = existing
 
-addHelpHighlightForFigure :: Board -> Figure -> Array CellCoord VisualCell -> Array CellCoord VisualCell
+addHelpHighlightForFigure :: HasCallStack => Board -> Figure -> Array CellCoord VisualCell -> Array CellCoord VisualCell
 addHelpHighlightForFigure b fig cells =
   cells // cellsToUpdate where
     figureCoords = cellCoordToCoord <$> figureCellCoords fig
-    canBePlaced = concatMap (\coord -> (+ coord) <$> figureCoords) $ pointsWhereFigureCanBePlaced fig b
-    currentCells = (\coord -> (coord, cells ! coord)) . coordToCellCoord <$> canBePlaced
-    cellsToUpdate = (\(coord, curr) -> (coord, mergeCellHelpingHighlight curr $ VCanBePlacedHint PrimaryStyle)) <$> currentCells
+    canBePlaced = map (\coord -> (coord, (+ coord) <$> figureCoords)) $ pointsWhereFigureCanBePlaced fig b
+    currentCells = concatMap (\(startCoord, coords) -> (\coord -> (startCoord, coordToCellCoord coord, cells ! coordToCellCoord coord)) <$> coords) canBePlaced
+    cellsToUpdate = 
+      (\(startCoord, coord, curr) -> (coord, mergeCellHelpingHighlight curr $ VCanBePlacedHint PrimaryStyle (placementResult startCoord))) 
+      <$> currentCells
+    placementResult :: HasCallStack => Coord -> HintPlacementResult
+    placementResult coord =
+      case tryPlaceFigure fig coord b of
+        Just newBoard ->
+          if null $ rangesToBeFreed newBoard then
+            JustFigure
+          else
+            Region
+        Nothing -> JustFigure
+
 
 addHelpHighlight :: Game -> Array CellCoord VisualCell -> Array CellCoord VisualCell
 addHelpHighlight g cells | g ^. easyMode == False = cells
@@ -382,7 +398,7 @@ cellsToDisplay game = case game ^. currentGame . state of
   where
     wrap cells = addHelpHighlight game $ addAltStyleCells $ cells
     brd = game ^. currentGame . board
-
+      
 figuresToPlace :: Game -> [Maybe (FigureToPlace FigureInSelection)]
 figuresToPlace game =
   game ^. currentGame 

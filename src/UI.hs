@@ -30,7 +30,8 @@ import Brickudoku
     autoPlay,
     GameEvent (..),
     FigureInSelection(..),
-    currentGame )
+    currentGame,
+    HintPlacementResult (..) )
 
 import Control.Monad.State.Strict
     ( MonadIO(liftIO), MonadState(put, get) )
@@ -225,8 +226,10 @@ drawPlacingCell VCanPlaceFullFigure = withAttr placingCanPlaceFullFigureAttr cel
 drawPlacingCell VCanPlaceButNotFullFigure = withAttr placingCanPlaceButNotFullFigure cellWidget
 drawPlacingCell VCannotPlace = withAttr placingCannotPlaceAttr cellWidget
 drawPlacingCell VWillBeFreed = withAttr placingWillBeFreedAttr cellWidget
-drawPlacingCell (VCanBePlacedHint PrimaryStyle) = withAttr canBePlacedHintAttr hintWidget
-drawPlacingCell (VCanBePlacedHint AltStyle) = withAttr canBePlacedHintAltStyleAttr hintWidget
+drawPlacingCell (VCanBePlacedHint PrimaryStyle JustFigure) = withAttr canBePlacedHintAttr hintWidget
+drawPlacingCell (VCanBePlacedHint AltStyle JustFigure) = withAttr canBePlacedHintAltStyleAttr hintWidget
+drawPlacingCell (VCanBePlacedHint PrimaryStyle Region) = withAttr canBePlacedWillFreeHintAttr hintWidget
+drawPlacingCell (VCanBePlacedHint AltStyle Region) = withAttr canBePlacedWillFreeHintAltStyleAttr hintWidget
 
 drawFigure :: (a -> Widget Name) -> Array CellCoord a -> Widget Name
 drawFigure drawOneCell figure = vBox cellRows where
@@ -277,20 +280,24 @@ drawCell Filled = withAttr filledCellAttr cellWidget
 
 emptyCellAttr, emptyAltStyleCellAttr, filledCellAttr, placingCanPlaceFullFigureAttr, 
   placingCanPlaceButNotFullFigure, placingCannotPlaceAttr, placingWillBeFreedAttr,
-  board3x3BorderAttr, canBePlacedHintAttr, canBePlacedHintAltStyleAttr, helpShortcutAttr,
-  gameOverAttr :: AttrName
-emptyCellAttr                   = attrName "emptyCell"
-emptyAltStyleCellAttr           = attrName "emptyAltStyleCell"
-filledCellAttr                  = attrName "filledCell"
-placingCanPlaceFullFigureAttr   = attrName "placingCanPlaceFullFigure"
-placingCanPlaceButNotFullFigure = attrName "placingCanPlaceButNotFullFigure"
-placingCannotPlaceAttr          = attrName "placingCannotPlace"
-placingWillBeFreedAttr          = attrName "placingWillBeFreed"
-board3x3BorderAttr              = attrName "board3x3Border"
-canBePlacedHintAttr             = attrName "canBePlacedHint"
-canBePlacedHintAltStyleAttr     = attrName "canBePlacedHintAltStyle"
-helpShortcutAttr                = attrName "helpShortcut"
-gameOverAttr                    = attrName "gameOver"
+  board3x3BorderAttr,
+  canBePlacedHintAttr, canBePlacedHintAltStyleAttr,
+  canBePlacedWillFreeHintAttr, canBePlacedWillFreeHintAltStyleAttr,
+  helpShortcutAttr, gameOverAttr :: AttrName
+emptyCellAttr                       = attrName "emptyCell"
+emptyAltStyleCellAttr               = attrName "emptyAltStyleCell"
+filledCellAttr                      = attrName "filledCell"
+placingCanPlaceFullFigureAttr       = attrName "placingCanPlaceFullFigure"
+placingCanPlaceButNotFullFigure     = attrName "placingCanPlaceButNotFullFigure"
+placingCannotPlaceAttr              = attrName "placingCannotPlace"
+placingWillBeFreedAttr              = attrName "placingWillBeFreed"
+board3x3BorderAttr                  = attrName "board3x3Border"
+canBePlacedHintAttr                 = attrName "canBePlacedHint"
+canBePlacedHintAltStyleAttr         = attrName "canBePlacedHintAltStyle"
+canBePlacedWillFreeHintAttr         = attrName "canBePlacedWillFreeHint"
+canBePlacedWillFreeHintAltStyleAttr = attrName "canBePlacedWillFreeHintAltStyle"
+helpShortcutAttr                    = attrName "helpShortcut"
+gameOverAttr                        = attrName "gameOver"
 
 theMap :: AttrMap
 theMap = attrMap V.defAttr
@@ -305,6 +312,8 @@ theMap = attrMap V.defAttr
     (board3x3BorderAttr, fg V.white),
     (canBePlacedHintAttr, fg V.green),
     (canBePlacedHintAltStyleAttr, V.green `on` V.brightWhite),
+    (canBePlacedWillFreeHintAttr, fg V.yellow),
+    (canBePlacedWillFreeHintAltStyleAttr, V.yellow `on` V.brightWhite),
     (gameOverAttr, fg V.red),
     (helpShortcutAttr, fg V.blue)
   ]
@@ -325,6 +334,8 @@ gameOverMap =
     (board3x3BorderAttr, disabled),
     (canBePlacedHintAttr, disabled),
     (canBePlacedHintAltStyleAttr, V.defAttr),
+    (canBePlacedWillFreeHintAttr, disabled),
+    (canBePlacedWillFreeHintAltStyleAttr, V.defAttr),
     (gameOverAttr, fg V.brightRed),
     (helpShortcutAttr, fg V.brightBlack)
   ]

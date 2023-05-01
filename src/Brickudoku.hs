@@ -46,6 +46,7 @@ import qualified Data.Bifunctor
 import System.Random (randomRIO)
 import GHC.Stack (HasCallStack)
 import Undo (History(..), newHistory, put, current, tryUndoUntilDifferentL, tryRedoUntilDifferentL)
+import Data.List.Extra (groupOnKey)
 
 ----
 
@@ -54,10 +55,10 @@ data Cell =
   deriving stock (Show, Eq)
 
 data FreeStyle = PrimaryStyle | AltStyle
-  deriving stock (Show, Eq)
+  deriving stock (Show, Eq, Ord)
 
 data HintPlacementResult = JustFigure | Region
-  deriving stock (Show, Eq)
+  deriving stock (Show, Eq, Ord)
 
 data VisualCell =
   VFree FreeStyle |
@@ -67,7 +68,7 @@ data VisualCell =
   VCanPlaceButNotFullFigure |
   VCannotPlace |
   VCanBePlacedHint FreeStyle HintPlacementResult
-  deriving stock (Show, Eq)
+  deriving stock (Show, Eq, Ord)
 
 allPlaced :: [Maybe a] -> Bool
 allPlaced = all isNothing
@@ -362,16 +363,24 @@ mergeCellHelpingHighlight existing _ = existing
 
 addHelpHighlightForFigure :: HasCallStack => Board -> Figure -> Array CellCoord VisualCell -> Array CellCoord VisualCell
 addHelpHighlightForFigure b fig cells =
-  cells // cellsToUpdate where
+  cells // mergedCellsToUpdate where
     figureCoords = cellCoordToCoord <$> figureCellCoords fig
     canBePlaced = (\startPos -> (startPos, (+ startPos) <$> figureCoords)) <$> pointsWhereFigureCanBePlaced fig b
     currentCells = 
       concatMap (\(startCoord, coords) -> 
         (\coord -> (startCoord, coordToCellCoord coord, cells ! coordToCellCoord coord)) <$> coords) 
         canBePlaced
-    cellsToUpdate = 
+    -- Here single coordinate can occur multiple times, need to merge the cells
+    cellsToUpdate =
       (\(startCoord, coord, curr) -> (coord, mergeCellHelpingHighlight curr $ VCanBePlacedHint PrimaryStyle (placementResult startCoord))) 
       <$> currentCells
+    mergedCellsToUpdate =
+      -- Drop the grouping key (coord)
+      map snd
+      -- Here we use that 'JustFigure' < 'Region'. For each list of cells with the same coord use max of them.
+      $ Data.Bifunctor.second maximum
+      -- Convert to [(Coord, [(Coord, VisualCell)])]
+      <$> groupOnKey fst cellsToUpdate
     placementResult :: HasCallStack => Coord -> HintPlacementResult
     placementResult coord =
       case tryPlaceFigure fig coord b of

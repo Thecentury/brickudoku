@@ -191,7 +191,13 @@ drawScore game =
   $ B.borderWithLabel (str " Score ")
   $ C.hCenter
   $ padAll 1
-  $ str $ show $ game ^. currentGame . score
+  $ str scoreString where
+    scoreString =
+      if length string `div` 2 == 0 then
+        string
+      else
+        " " ++ string
+    string = show $ game ^. currentGame . score
 
 helpWidget :: Widget Name
 helpWidget =

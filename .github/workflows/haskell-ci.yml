@@ -12,7 +12,7 @@
 #
 # REGENDATA ("0.16.1",["github","haskell-brickudoku.cabal"])
 #
-name: Haskell-CI
+name: build
 on:
   - push
   - pull_request

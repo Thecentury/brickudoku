@@ -1,4 +1,4 @@
-# Brickudoku
+# Brickudoku [![Build Status](https://github.com/thecentury/brickudoku/actions/workflows/haskell-ci.yml/badge.svg)](https://github.com/thecentury/brickudoku/actions/workflows/haskell-ci.yml)
 
 [![Hackage](https://img.shields.io/hackage/v/haskell-brickudoku.svg?logo=haskell)](https://hackage.haskell.org/package/haskell-brickudoku)
 [![Stackage Lts](http://stackage.org/package/haskell-brickudoku/badge/lts)](http://stackage.org/lts/package/haskell-brickudoku)

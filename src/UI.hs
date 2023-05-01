@@ -216,20 +216,23 @@ cellWidget :: Widget n
 cellWidget = str "  "
 
 hintWidget :: Widget n
-hintWidget = str "◤◢"
+hintWidget = str "··"
+
+hintWillFreeWidget :: Widget n
+hintWillFreeWidget = str "◤◢"
 
 drawPlacingCell :: VisualCell -> Widget Name
 drawPlacingCell (VFree PrimaryStyle) = withAttr emptyCellAttr cellWidget
-drawPlacingCell (VFree AltStyle) = withAttr emptyAltStyleCellAttr cellWidget
+drawPlacingCell (VFree AltStyle)     = withAttr emptyAltStyleCellAttr cellWidget
 drawPlacingCell VFilled = withAttr filledCellAttr cellWidget
 drawPlacingCell VCanPlaceFullFigure = withAttr placingCanPlaceFullFigureAttr cellWidget
 drawPlacingCell VCanPlaceButNotFullFigure = withAttr placingCanPlaceButNotFullFigure cellWidget
 drawPlacingCell VCannotPlace = withAttr placingCannotPlaceAttr cellWidget
 drawPlacingCell VWillBeFreed = withAttr placingWillBeFreedAttr cellWidget
 drawPlacingCell (VCanBePlacedHint PrimaryStyle JustFigure) = withAttr canBePlacedHintAttr hintWidget
-drawPlacingCell (VCanBePlacedHint AltStyle JustFigure) = withAttr canBePlacedHintAltStyleAttr hintWidget
-drawPlacingCell (VCanBePlacedHint PrimaryStyle Region) = withAttr canBePlacedWillFreeHintAttr hintWidget
-drawPlacingCell (VCanBePlacedHint AltStyle Region) = withAttr canBePlacedWillFreeHintAltStyleAttr hintWidget
+drawPlacingCell (VCanBePlacedHint AltStyle     JustFigure) = withAttr canBePlacedHintAltStyleAttr hintWidget
+drawPlacingCell (VCanBePlacedHint PrimaryStyle Region)     = withAttr canBePlacedWillFreeHintAttr hintWillFreeWidget
+drawPlacingCell (VCanBePlacedHint AltStyle     Region)     = withAttr canBePlacedWillFreeHintAltStyleAttr hintWillFreeWidget
 
 drawFigure :: (a -> Widget Name) -> Array CellCoord a -> Widget Name
 drawFigure drawOneCell figure = vBox cellRows where
@@ -310,6 +313,7 @@ theMap = attrMap V.defAttr
     (placingCannotPlaceAttr, V.yellow `on` V.yellow),
     (placingWillBeFreedAttr, V.green `on` V.green),
     (board3x3BorderAttr, fg V.white),
+    -- todo somehow combine these 4.
     (canBePlacedHintAttr, fg V.green),
     (canBePlacedHintAltStyleAttr, V.green `on` V.brightWhite),
     (canBePlacedWillFreeHintAttr, fg V.yellow),

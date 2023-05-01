@@ -66,7 +66,7 @@ data VisualCell =
   VCanPlaceFullFigure |
   VCanPlaceButNotFullFigure |
   VCannotPlace |
-  VCanBePlacedHint FreeStyle HintPlacementResult -- todo add different highlight for points where placing a figure will cause freeing some regions
+  VCanBePlacedHint FreeStyle HintPlacementResult
   deriving stock (Show, Eq)
 
 allPlaced :: [Maybe a] -> Bool
@@ -111,8 +111,7 @@ col = snd
 type Figure = Array CellCoord Cell
 
 figureCellCoords :: Figure -> [CellCoord]
-figureCellCoords fig =
-  fmap fst $ filter (\(_, e) -> e == Filled) . assocs $ fig
+figureCellCoords = fmap fst . filter (\(_, e) -> e == Filled) . assocs
 
 type Board = Figure
 
@@ -267,18 +266,18 @@ addPlacingFigure figure figureCoord board =
     toBeFreedCells = (, VWillBeFreed) <$> rangesWillBeFreed
 
     newCoord :: CellCoord -> CellCoord
-    newCoord (r, c) = (r + figureCoord^._y, c + figureCoord^._x)
+    newCoord (r, c) = (r + figureCoord ^. _y, c + figureCoord ^. _x)
 
     canPlaceFullFigure = all (\coord -> board ! coord == Free) $ newCoord <$> figureCellCoords figure
 
     figureCell :: CellCoord -> Cell -> VisualCell
     figureCell boardCoord figCell =
       case (board ! boardCoord, figCell, canPlaceFullFigure) of
-        (Filled, Filled, _) -> VCannotPlace
-        (Filled, Free, _) -> VFilled
-        (Free, Filled, True) -> VCanPlaceFullFigure
-        (Free, Filled, False) -> VCanPlaceButNotFullFigure
-        (Free, Free, _) -> VFree PrimaryStyle
+        (Filled, Filled, _)     -> VCannotPlace
+        (Filled, Free,   _)     -> VFilled
+        (Free,   Filled, True)  -> VCanPlaceFullFigure
+        (Free,   Filled, False) -> VCanPlaceButNotFullFigure
+        (Free,   Free,   _)     -> VFree PrimaryStyle
 
 type FigureIndex = Int
 
@@ -365,8 +364,11 @@ addHelpHighlightForFigure :: HasCallStack => Board -> Figure -> Array CellCoord 
 addHelpHighlightForFigure b fig cells =
   cells // cellsToUpdate where
     figureCoords = cellCoordToCoord <$> figureCellCoords fig
-    canBePlaced = map (\coord -> (coord, (+ coord) <$> figureCoords)) $ pointsWhereFigureCanBePlaced fig b
-    currentCells = concatMap (\(startCoord, coords) -> (\coord -> (startCoord, coordToCellCoord coord, cells ! coordToCellCoord coord)) <$> coords) canBePlaced
+    canBePlaced = (\startPos -> (startPos, (+ startPos) <$> figureCoords)) <$> pointsWhereFigureCanBePlaced fig b
+    currentCells = 
+      concatMap (\(startCoord, coords) -> 
+        (\coord -> (startCoord, coordToCellCoord coord, cells ! coordToCellCoord coord)) <$> coords) 
+        canBePlaced
     cellsToUpdate = 
       (\(startCoord, coord, curr) -> (coord, mergeCellHelpingHighlight curr $ VCanBePlacedHint PrimaryStyle (placementResult startCoord))) 
       <$> currentCells
@@ -380,9 +382,8 @@ addHelpHighlightForFigure b fig cells =
             Region
         Nothing -> JustFigure
 
-
 addHelpHighlight :: Game -> Array CellCoord VisualCell -> Array CellCoord VisualCell
-addHelpHighlight g cells | g ^. easyMode == False = cells
+addHelpHighlight g cells | not (g ^. easyMode) = cells
 addHelpHighlight (Game (History (VersionedState _ _ _ GameOver _) _ _) _ _) cells = cells
 addHelpHighlight (Game (History (VersionedState _ b _ (SelectingFigure (FigureInSelection fig _)) _) _ _) _ _) cells =
   addHelpHighlightForFigure b fig cells
@@ -396,7 +397,7 @@ cellsToDisplay game = case game ^. currentGame . state of
   _ ->
     wrap $ boardToPlacingCells brd
   where
-    wrap cells = addHelpHighlight game $ addAltStyleCells $ cells
+    wrap cells = addHelpHighlight game $ addAltStyleCells cells
     brd = game ^. currentGame . board
       
 figuresToPlace :: Game -> [Maybe (FigureToPlace FigureInSelection)]

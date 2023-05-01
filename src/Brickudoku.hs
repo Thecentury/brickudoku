@@ -8,6 +8,7 @@ module Brickudoku
     GameState(..),
     Figure,
     CellCoord,
+    FreeStyle(..),
     VisualCell(..),
     Cell(..),
     FigureInSelection,
@@ -52,15 +53,17 @@ data Cell =
   Free | Filled
   deriving stock (Show, Eq)
 
+data FreeStyle = PrimaryStyle | AltStyle
+  deriving stock (Show, Eq)
+
 data VisualCell =
-  VFree |
-  VFreeAltStyle |
+  VFree FreeStyle |
   VFilled |
   VWillBeFreed |
   VCanPlaceFullFigure |
   VCanPlaceButNotFullFigure |
   VCannotPlace |
-  VCanBePlaced -- todo add different highlight for points where placing a figure will cause freeing some regions
+  VCanBePlaced FreeStyle -- todo add different highlight for points where placing a figure will cause freeing some regions
   deriving stock (Show, Eq)
 
 allPlaced :: [Maybe a] -> Bool
@@ -186,7 +189,7 @@ canBePlacedToBoardAtSomePoint fig b =
 ----
 
 boardCellToPlacingCell :: Cell -> VisualCell
-boardCellToPlacingCell Free = VFree
+boardCellToPlacingCell Free = VFree PrimaryStyle
 boardCellToPlacingCell Filled = VFilled
 
 boardToPlacingCells :: Board -> Array CellCoord VisualCell
@@ -199,9 +202,9 @@ boardToPlacingCells board =
 addAltStyleCells :: Array CellCoord VisualCell -> Array CellCoord VisualCell
 addAltStyleCells cells = cells // mapMaybe addAltStyleCell (assocs cells) where
   addAltStyleCell :: (CellCoord, VisualCell) -> Maybe (CellCoord, VisualCell)
-  addAltStyleCell (coord, VFree) =
+  addAltStyleCell (coord, VFree PrimaryStyle) =
     if isAltStyleCell coord then
-      Just (coord, VFreeAltStyle)
+      Just (coord, VFree AltStyle)
     else
       Nothing
   addAltStyleCell _ = Nothing
@@ -273,7 +276,7 @@ addPlacingFigure figure figureCoord board =
         (Filled, Free, _) -> VFilled
         (Free, Filled, True) -> VCanPlaceFullFigure
         (Free, Filled, False) -> VCanPlaceButNotFullFigure
-        (Free, Free, _) -> VFree
+        (Free, Free, _) -> VFree PrimaryStyle
 
 type FigureIndex = Int
 
@@ -355,7 +358,7 @@ isPlacingFigure game = case game ^. currentGame . state of
   _ -> False
 
 mergeCellHelpingHighlight :: VisualCell -> VisualCell -> VisualCell
-mergeCellHelpingHighlight VFree VCanBePlaced = VCanBePlaced
+mergeCellHelpingHighlight (VFree style) (VCanBePlaced _) = VCanBePlaced style
 mergeCellHelpingHighlight existing _         = existing
 
 addHelpHighlightForFigure :: Board -> Figure -> Array CellCoord VisualCell -> Array CellCoord VisualCell
@@ -363,7 +366,7 @@ addHelpHighlightForFigure b fig cells =
   cells // cellsToUpdate where
     canBePlaced = pointsWhereFigureCanBePlaced fig b
     currentCells = (\coord -> (coord, cells ! coord)) . coordToCellCoord <$> canBePlaced
-    cellsToUpdate = (\(coord, curr) -> (coord, mergeCellHelpingHighlight curr VCanBePlaced)) <$> currentCells
+    cellsToUpdate = (\(coord, curr) -> (coord, mergeCellHelpingHighlight curr $ VCanBePlaced PrimaryStyle)) <$> currentCells
 
 addHelpHighlight :: Game -> Array CellCoord VisualCell -> Array CellCoord VisualCell
 addHelpHighlight g cells | g ^. easyMode == False = cells

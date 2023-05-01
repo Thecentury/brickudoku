@@ -596,7 +596,8 @@ data SystemAction =
   NextAutoPlayTurn |
   ToggleAutoPlay |
   Undo |
-  Redo
+  Redo |
+  ToggleEasyMode
   deriving stock (Eq, Show)
 
 data Action =
@@ -660,6 +661,7 @@ possibleActionsImpl game generateAutoPlay = do
             startPlacing,
             newGame,
             toggleAutoPlayAction game,
+            toggleEasyModeAction game,
             autoPlayTurn,
             undoAction game,
             redoAction game
@@ -730,6 +732,7 @@ possibleActionsImpl game generateAutoPlay = do
             placeAction,
             newGame,
             toggleAutoPlayAction game,
+            toggleEasyModeAction game,
             autoPlayTurn,
             undoAction game,
             redoAction game,
@@ -740,7 +743,8 @@ possibleActionsImpl game generateAutoPlay = do
       pure $ catMaybes [
           newGame,
           undoAction game,
-          toggleAutoPlayAction game
+          toggleAutoPlayAction game,
+          toggleEasyModeAction game
         ]
 
 undoAction :: Game -> Maybe (Action, Game)
@@ -754,6 +758,11 @@ redoAction game =
   case game ^. history & tryRedoUntilDifferentL board of
     Nothing -> Nothing
     Just history' -> Just (SystemAction Redo, game & history .~ history')
+
+toggleEasyModeAction :: Game -> Maybe (Action, Game)
+toggleEasyModeAction game =
+  Just (SystemAction ToggleEasyMode, game') where
+    game' = game & easyMode %~ not 
 
 possibleActions :: Game -> IO [(Action, Game)]
 possibleActions game = possibleActionsImpl game True

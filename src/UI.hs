@@ -81,6 +81,7 @@ keyBindings =
     (VtyEvent (V.EvKey V.KEsc []), [UserAction CancelPlacingFigure]),
     (VtyEvent (V.EvKey (V.KChar 'R') []), [SystemAction RestartGame]),
     (VtyEvent (V.EvKey (V.KChar 'A') []), [SystemAction ToggleAutoPlay]),
+    (VtyEvent (V.EvKey (V.KChar 'E') []), [SystemAction ToggleEasyMode]),
     (VtyEvent (V.EvKey (V.KChar 'u') []), [SystemAction Undo]),
     (VtyEvent (V.EvKey (V.KChar 'r') []), [SystemAction Redo]),
     (AppEvent Tick, [SystemAction NextAutoPlayTurn])
@@ -220,7 +221,7 @@ drawPlacingCell VCanPlaceFullFigure = withAttr placingCanPlaceFullFigureAttr cel
 drawPlacingCell VCanPlaceButNotFullFigure = withAttr placingCanPlaceButNotFullFigure cellWidget
 drawPlacingCell VCannotPlace = withAttr placingCannotPlaceAttr cellWidget
 drawPlacingCell VWillBeFreed = withAttr placingWillBeFreedAttr cellWidget
-drawPlacingCell VCanBePlaced = withAttr canBePlacedHintAttr cellWidget
+drawPlacingCell VCanBePlaced = withAttr canBePlacedHintAttr $ str "◤◢"
 
 drawFigure :: (a -> Widget Name) -> Array CellCoord a -> Widget Name
 drawFigure drawOneCell figure = vBox cellRows where
@@ -297,7 +298,7 @@ theMap = attrMap V.defAttr
     (placingCannotPlaceAttr, V.yellow `on` V.yellow),
     (placingWillBeFreedAttr, V.green `on` V.green),
     (board3x3BorderAttr, fg V.white),
-    (canBePlacedHintAttr, V.green `on` V.green),
+    (canBePlacedHintAttr, fg V.green),
     (gameOverAttr, fg V.red),
     (helpShortcutAttr, fg V.blue)
   ]

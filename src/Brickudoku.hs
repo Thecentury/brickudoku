@@ -63,7 +63,7 @@ data VisualCell =
   VCanPlaceFullFigure |
   VCanPlaceButNotFullFigure |
   VCannotPlace |
-  VCanBePlaced FreeStyle -- todo add different highlight for points where placing a figure will cause freeing some regions
+  VCanBePlacedHint FreeStyle -- todo add different highlight for points where placing a figure will cause freeing some regions
   deriving stock (Show, Eq)
 
 allPlaced :: [Maybe a] -> Bool
@@ -358,7 +358,7 @@ isPlacingFigure game = case game ^. currentGame . state of
   _ -> False
 
 mergeCellHelpingHighlight :: VisualCell -> VisualCell -> VisualCell
-mergeCellHelpingHighlight (VFree style) (VCanBePlaced _) = VCanBePlaced style
+mergeCellHelpingHighlight (VFree style) (VCanBePlacedHint _) = VCanBePlacedHint style
 mergeCellHelpingHighlight existing _         = existing
 
 addHelpHighlightForFigure :: Board -> Figure -> Array CellCoord VisualCell -> Array CellCoord VisualCell
@@ -366,7 +366,7 @@ addHelpHighlightForFigure b fig cells =
   cells // cellsToUpdate where
     canBePlaced = pointsWhereFigureCanBePlaced fig b
     currentCells = (\coord -> (coord, cells ! coord)) . coordToCellCoord <$> canBePlaced
-    cellsToUpdate = (\(coord, curr) -> (coord, mergeCellHelpingHighlight curr $ VCanBePlaced PrimaryStyle)) <$> currentCells
+    cellsToUpdate = (\(coord, curr) -> (coord, mergeCellHelpingHighlight curr $ VCanBePlacedHint PrimaryStyle)) <$> currentCells
 
 addHelpHighlight :: Game -> Array CellCoord VisualCell -> Array CellCoord VisualCell
 addHelpHighlight g cells | g ^. easyMode == False = cells

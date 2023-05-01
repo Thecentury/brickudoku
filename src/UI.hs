@@ -225,8 +225,8 @@ drawPlacingCell VCanPlaceFullFigure = withAttr placingCanPlaceFullFigureAttr cel
 drawPlacingCell VCanPlaceButNotFullFigure = withAttr placingCanPlaceButNotFullFigure cellWidget
 drawPlacingCell VCannotPlace = withAttr placingCannotPlaceAttr cellWidget
 drawPlacingCell VWillBeFreed = withAttr placingWillBeFreedAttr cellWidget
-drawPlacingCell (VCanBePlaced PrimaryStyle) = withAttr canBePlacedHintAttr hintWidget
-drawPlacingCell (VCanBePlaced AltStyle) = withAttr canBePlacedHintAltStyleAttr hintWidget
+drawPlacingCell (VCanBePlacedHint PrimaryStyle) = withAttr canBePlacedHintAttr hintWidget
+drawPlacingCell (VCanBePlacedHint AltStyle) = withAttr canBePlacedHintAltStyleAttr hintWidget
 
 drawFigure :: (a -> Widget Name) -> Array CellCoord a -> Widget Name
 drawFigure drawOneCell figure = vBox cellRows where

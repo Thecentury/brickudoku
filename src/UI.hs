@@ -109,11 +109,10 @@ drawUI :: Game -> [Widget Name]
 drawUI game =
   [
     gameOverWidget,
-    C.center (centralColumn <+> padLeft (Pad 2) rightColumn)
+    C.center $ withAutoPlayStyle $ applyGameOverPalette $ centralColumn <+> padTop rightColumnTopPadding (padLeft (Pad 2) rightColumn)
   ] where
     centralColumn =
       wrapWithAutoPlayBorder
-      $ applyGameOverPalette
       $ C.hCenter (str $ "Turn: " ++ show (game ^. currentGame . turnNumber))
       <=> C.hCenter (withPlacingFigureBorder $ drawGrid game)
       <=> padTop (Pad 1) figuresToPlaceWidgets
@@ -123,6 +122,18 @@ drawUI game =
         drawScore game,
         padTop (Pad 2) helpWidget
       ]
+
+    rightColumnTopPadding =
+      if game ^. autoPlay then
+        Pad 3
+      else
+        Pad 0
+
+    withAutoPlayStyle =
+      if game ^. autoPlay then
+        updateAttrMap (A.applyAttrMappings autoPlayBorderMapping)
+      else
+        id
     
     figuresToPlaceWidgets =
       C.hCenter
@@ -150,6 +161,7 @@ drawUI game =
         $ str "Game over"
       else
          emptyWidget
+    
     withPlacingFigureBorder :: Widget Name -> Widget Name
     withPlacingFigureBorder widget =
       if isPlacingFigure game then
@@ -163,8 +175,7 @@ drawUI game =
     wrapWithAutoPlayBorder :: Widget Name -> Widget Name
     wrapWithAutoPlayBorder widget =
       if game ^. autoPlay then
-        updateAttrMap (A.applyAttrMappings autoPlayBorderMapping)
-        $ hLimit 60 
+        hLimit 60 
         $ C.hCenter
         $ withBorderStyle BS.unicodeRounded 
         $ B.borderWithLabel (str " Auto-play ") 

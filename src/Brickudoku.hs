@@ -11,10 +11,9 @@ module Brickudoku
     FreeStyle(..),
     VisualCell(..),
     Cell(..),
-    FigureInSelection,
+    FigureInSelection(..),
     FigureToPlace(..),
     FigureToPlaceKind(..),
-    figureInSelection,
     cellsToDisplay,
     isGameOver,
     isPlacingFigure,
@@ -229,8 +228,7 @@ addAltStyleCells cells = cells // mapMaybe addAltStyleCell (assocs cells) where
   thickColumnNumber x = x `div` 3
 
 markFigureAsPlaced :: FigureInSelection -> Array FigureIndex (Maybe FigureInSelection) -> Array FigureIndex (Maybe FigureInSelection)
-markFigureAsPlaced figureInSelection figures =
-  figures // [(_figureIndex figureInSelection, Nothing)]
+markFigureAsPlaced (FigureInSelection _ ix) figures = figures // [(ix, Nothing)]
 
 tryPlaceFigure :: HasCallStack => Figure -> Coord -> Board -> Maybe Figure
 tryPlaceFigure figure figureCoord board =
@@ -281,9 +279,7 @@ addPlacingFigure figure figureCoord board =
 type FigureIndex = Int
 
 -- todo rename, not always relates to a selection
-data FigureInSelection = FigureInSelection
-  { _figureInSelection :: Figure,
-    _figureIndex :: FigureIndex }
+data FigureInSelection = FigureInSelection Figure FigureIndex
   deriving stock (Show, Eq)
 
 data FigureToPlaceKind =
@@ -379,8 +375,8 @@ addHelpHighlight (Game (History (VersionedState _ b _ (PlacingFigure (FigureInSe
 
 cellsToDisplay :: Game -> PlacingCellsFigure
 cellsToDisplay game = case game ^. currentGame . state of
-  PlacingFigure figure coord -> 
-    wrap $ addPlacingFigure (figure ^. figureInSelection) coord brd
+  PlacingFigure (FigureInSelection figure _) coord -> 
+    wrap $ addPlacingFigure figure coord brd
   _ ->
     wrap $ boardToPlacingCells brd
   where
@@ -400,9 +396,9 @@ figuresToPlace game =
         SelectingFigure selectedFigure -> canBePlaced selectedFigure fig Selected
         PlacingFigure selectedFigure _ -> canBePlaced selectedFigure fig SelectedPlacing
     canBePlaced :: FigureInSelection -> FigureInSelection -> FigureToPlaceKind -> FigureToPlaceKind
-    canBePlaced selectedFigure fig selectedMode
+    canBePlaced selectedFigure fig@(FigureInSelection figureItself _) selectedMode
       | fig == selectedFigure = selectedMode
-      | canBePlacedToBoardAtSomePoint (fig ^. figureInSelection) (game ^. currentGame . board) = CanBePlaced
+      | canBePlacedToBoardAtSomePoint figureItself (game ^. currentGame . board) = CanBePlaced
       | otherwise = CannotBePlaced      
 
 --- Figures generation ---
@@ -566,14 +562,14 @@ nextFigureIndices currentFigureIndex =
 
 previousFigureIndices :: FigureIndex -> [FigureIndex]
 previousFigureIndices currentFigureIndex =
-  map (`rem` figuresToPlaceCount) [figuresToPlaceCount + currentFigureIndex - 1, figuresToPlaceCount + currentFigureIndex - 2]
+  (`rem` figuresToPlaceCount) <$> [figuresToPlaceCount + currentFigureIndex - 1, figuresToPlaceCount + currentFigureIndex - 2]
 
 tryFindNextFigureToSelect :: HasCallStack => Figure -> Array FigureIndex (Maybe FigureInSelection) -> [FigureIndex] -> Maybe FigureInSelection
 tryFindNextFigureToSelect b figs nextIndices =
   join $ find canBeSelected nexts where
     canBeSelected :: Maybe FigureInSelection -> Bool
     canBeSelected Nothing = False
-    canBeSelected (Just f) = canBePlacedToBoardAtSomePoint (f ^. figureInSelection) b
+    canBeSelected (Just (FigureInSelection f _)) = canBePlacedToBoardAtSomePoint f b
 
     nexts :: [Maybe FigureInSelection]
     nexts = (figs !) <$> nextIndices
@@ -651,7 +647,7 @@ randomElement list = do
 possibleActionsImpl :: HasCallStack => Game -> Bool -> IO [(Action, Game)]
 possibleActionsImpl game generateAutoPlay = do
   case game ^. currentGame . state of
-    SelectingFigure figure -> actions where
+    SelectingFigure figure@(FigureInSelection selectedFigure figureIndex) -> actions where
       actions = do
         newGame <- restartGameAction
         autoPlayTurn <- nextAutoPlayTurnAction game generateAutoPlay
@@ -670,29 +666,28 @@ possibleActionsImpl game generateAutoPlay = do
 
       moveFigure :: Action -> (FigureIndex -> [FigureIndex]) -> Maybe (Action, Game)
       moveFigure action calculateNextIndices = do
-        let nextIndices = calculateNextIndices $ figure ^. figureIndex
+        let nextIndices = calculateNextIndices figureIndex
         nextFigure <- tryFindNextFigureToSelect (game ^. currentGame . board) (game ^. currentGame . figures) nextIndices
         let game' = updateCurrentNotVersioned game $ state .~ SelectingFigure nextFigure
         pure (action, game')
 
       startPlacing = do
-        let coord = fromMaybe zeroCoord $ listToMaybe $ pointsWhereFigureCanBePlaced (figure ^. figureInSelection) (game ^. currentGame . board)
+        let coord = fromMaybe zeroCoord $ listToMaybe $ pointsWhereFigureCanBePlaced selectedFigure (game ^. currentGame . board)
         let game' = updateCurrentNotVersioned game $ state .~ PlacingFigure figure coord
         pure (UserAction StartPlacingFigure, game')
 
-    PlacingFigure figure coord -> actions where
+    PlacingFigure figure@(FigureInSelection selectedFigure figureIndex) coord -> actions where
       board_ = game ^. currentGame . board
-      figureItself = figure ^. figureInSelection
 
       tryMove :: Coord -> Action -> Maybe (Action, Game)
       tryMove movement action = do
-        newCoord <- tryMoveFigure board_ figureItself coord movement
+        newCoord <- tryMoveFigure board_ selectedFigure coord movement
         let game' = updateCurrentNotVersioned game $ state .~ PlacingFigure figure newCoord
         pure (action, game')
 
       placeFigureAction :: HasCallStack => IO (Maybe (Action, Game))
       placeFigureAction = do
-        case tryPlaceFigure figureItself coord board_ of
+        case tryPlaceFigure selectedFigure coord board_ of
           Nothing -> pure Nothing
           Just newBoard -> do
             let figuresWithSelectedPlaced = markFigureAsPlaced figure $ game ^. currentGame . figures
@@ -700,7 +695,7 @@ possibleActionsImpl game generateAutoPlay = do
               if allPlaced $ elems figuresWithSelectedPlaced then
                 fmap (, 1, [0 .. figuresToPlaceCount - 1]) $ fmap Just <$> randomFigures
               else
-                pure (figuresWithSelectedPlaced, 0, nextFigureIndices $ figure ^. figureIndex)
+                pure (figuresWithSelectedPlaced, 0, nextFigureIndices figureIndex)
             let scoreIncr = scoreIncrement $ fst <$> rangesToBeFreed newBoard
             let state' =
                   figures .~ newFigures

@@ -25,7 +25,7 @@ data History s = History {
 
 makeLenses ''History
 
--- | Create a new history with a initial state
+-- | Create a new history with an initial state.
 newHistory :: s -> History s
 newHistory s = History s [] []
 

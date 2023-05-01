@@ -29,8 +29,8 @@ import Brickudoku
     boardSize,
     autoPlay,
     GameEvent (..),
-    figureInSelection,
-    FigureInSelection, currentGame )
+    FigureInSelection(..),
+    currentGame )
 
 import Control.Monad.State.Strict
     ( MonadIO(liftIO), MonadState(put, get) )
@@ -263,11 +263,11 @@ drawSomeFigureToPlace mapping borderStyle drawOneCell figure =
  $ drawFigure drawOneCell figure
 
 drawFigureToPlace :: Maybe (FigureToPlace FigureInSelection) -> Widget Name
-drawFigureToPlace Nothing                                       = drawSomeFigureToPlace notSelectedCanBePlacedFigureBorderMappings BS.unicodeRounded (\_ -> withAttr emptyCellAttr $ str "  ") emptyFigure
-drawFigureToPlace (Just (FigureToPlace figure Selected))        = drawSomeFigureToPlace selectedFigureBorderMappings BS.unicodeBold drawCell $ figure ^. figureInSelection
-drawFigureToPlace (Just (FigureToPlace figure SelectedPlacing)) = drawSomeFigureToPlace selectedPlacingFigureBorderMappings BS.unicodeBold drawCell $ figure ^. figureInSelection
-drawFigureToPlace (Just (FigureToPlace figure CanBePlaced))     = drawSomeFigureToPlace notSelectedCanBePlacedFigureBorderMappings BS.unicodeRounded drawCell $ figure ^. figureInSelection
-drawFigureToPlace (Just (FigureToPlace figure CannotBePlaced))  = drawSomeFigureToPlace notSelectedCanNotBePlacedFigureBorderMappings BS.unicodeRounded drawCell $ figure ^. figureInSelection
+drawFigureToPlace Nothing                                                             = drawSomeFigureToPlace notSelectedCanBePlacedFigureBorderMappings BS.unicodeRounded (\_ -> withAttr emptyCellAttr $ str "  ") emptyFigure
+drawFigureToPlace (Just (FigureToPlace (FigureInSelection figure _) Selected))        = drawSomeFigureToPlace selectedFigureBorderMappings BS.unicodeBold drawCell figure
+drawFigureToPlace (Just (FigureToPlace (FigureInSelection figure _) SelectedPlacing)) = drawSomeFigureToPlace selectedPlacingFigureBorderMappings BS.unicodeBold drawCell figure
+drawFigureToPlace (Just (FigureToPlace (FigureInSelection figure _) CanBePlaced))     = drawSomeFigureToPlace notSelectedCanBePlacedFigureBorderMappings BS.unicodeRounded drawCell figure
+drawFigureToPlace (Just (FigureToPlace (FigureInSelection figure _) CannotBePlaced))  = drawSomeFigureToPlace notSelectedCanNotBePlacedFigureBorderMappings BS.unicodeRounded drawCell figure
 
 drawCell :: Cell -> Widget Name
 drawCell Free = withAttr emptyCellAttr cellWidget
@@ -277,21 +277,20 @@ drawCell Filled = withAttr filledCellAttr cellWidget
 
 emptyCellAttr, emptyAltStyleCellAttr, filledCellAttr, placingCanPlaceFullFigureAttr, 
   placingCanPlaceButNotFullFigure, placingCannotPlaceAttr, placingWillBeFreedAttr,
-  board3x3BorderAttr, canBePlacedHintAttr, canBePlacedHintAltStyleAttr, helpShortcutAttr :: AttrName
-emptyCellAttr = attrName "emptyCell"
-emptyAltStyleCellAttr = attrName "emptyAltStyleCell"
-filledCellAttr = attrName "filledCell"
-placingCanPlaceFullFigureAttr = attrName "placingCanPlaceFullFigure"
+  board3x3BorderAttr, canBePlacedHintAttr, canBePlacedHintAltStyleAttr, helpShortcutAttr,
+  gameOverAttr :: AttrName
+emptyCellAttr                   = attrName "emptyCell"
+emptyAltStyleCellAttr           = attrName "emptyAltStyleCell"
+filledCellAttr                  = attrName "filledCell"
+placingCanPlaceFullFigureAttr   = attrName "placingCanPlaceFullFigure"
 placingCanPlaceButNotFullFigure = attrName "placingCanPlaceButNotFullFigure"
-placingCannotPlaceAttr = attrName "placingCannotPlace"
-placingWillBeFreedAttr = attrName "placingWillBeFreed"
-board3x3BorderAttr = attrName "board3x3Border"
-canBePlacedHintAttr = attrName "canBePlacedHint"
-canBePlacedHintAltStyleAttr = attrName "canBePlacedHintAltStyle"
-helpShortcutAttr = attrName "helpShortcut"
-
-gameOverAttr :: AttrName
-gameOverAttr = attrName "gameOver"
+placingCannotPlaceAttr          = attrName "placingCannotPlace"
+placingWillBeFreedAttr          = attrName "placingWillBeFreed"
+board3x3BorderAttr              = attrName "board3x3Border"
+canBePlacedHintAttr             = attrName "canBePlacedHint"
+canBePlacedHintAltStyleAttr     = attrName "canBePlacedHintAltStyle"
+helpShortcutAttr                = attrName "helpShortcut"
+gameOverAttr                    = attrName "gameOver"
 
 theMap :: AttrMap
 theMap = attrMap V.defAttr

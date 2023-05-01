@@ -1,13 +1,13 @@
 cradle:
   stack:
     - path: "./src"
-      component: "haskell-blockudoku:lib"
+      component: "haskell-brickudoku:lib"
 
     - path: "./app/Main.hs"
-      component: "haskell-blockudoku:exe:haskell-blockudoku-exe"
+      component: "haskell-brickudoku:exe:haskell-brickudoku-exe"
 
-    - path: "./app/Paths_haskell_blockudoku.hs"
-      component: "haskell-blockudoku:exe:haskell-blockudoku-exe"
+    - path: "./app/Paths_haskell_brickudoku.hs"
+      component: "haskell-brickudoku:exe:haskell-brickudoku-exe"
 
     - path: "./test"
-      component: "haskell-blockudoku:test:haskell-blockudoku-test"
+      component: "haskell-brickudoku:test:haskell-brickudoku-test"

@@ -3,7 +3,7 @@
 {-# OPTIONS_GHC -Wno-unused-imports #-}
 module UI (main) where
 
-import Blockudoku
+import Brickudoku
     ( Game,
       GameState(..),
       Figure,

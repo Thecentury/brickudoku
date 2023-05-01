@@ -1,12 +1,11 @@
-name:                haskell-blockudoku
+name:                haskell-brickudoku
 version:             0.1.0.0
-github:              "thecentury/haskell-blockudoku"
+github:              "thecentury/haskell-brickudoku"
 license:             MIT
 author:              "thecentury"
 
 extra-source-files:
   - README.md
-  - CHANGELOG.md
 
 # Metadata used when publishing your package
 # synopsis:            Short description of your package
@@ -15,7 +14,7 @@ extra-source-files:
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description:         Please see the README on GitHub at <https://github.com/thecentury/haskell-blockudoku#readme>
+description:         Please see the README on GitHub at <https://github.com/thecentury/haskell-brickudoku#readme>
 
 tested-with: GHC==9.6.1
 
@@ -49,7 +48,7 @@ library:
   source-dirs: src
 
 executables:
-  haskell-blockudoku-exe:
+  haskell-brickudoku-exe:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
@@ -57,10 +56,10 @@ executables:
       - -rtsopts
       - -with-rtsopts=-N
     dependencies:
-      - haskell-blockudoku
+      - haskell-brickudoku
 
 tests:
-  haskell-blockudoku-test:
+  haskell-brickudoku-test:
     main:                Spec.hs
     source-dirs:         test
     ghc-options:
@@ -68,4 +67,4 @@ tests:
       - -rtsopts
       - -with-rtsopts=-N
     dependencies:
-      - haskell-blockudoku
+      - haskell-brickudoku

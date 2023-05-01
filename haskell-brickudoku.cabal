@@ -4,11 +4,11 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 
-name:           haskell-blockudoku
+name:           haskell-brickudoku
 version:        0.1.0.0
-description:    Please see the README on GitHub at <https://github.com/thecentury/haskell-blockudoku#readme>
-homepage:       https://github.com/thecentury/haskell-blockudoku#readme
-bug-reports:    https://github.com/thecentury/haskell-blockudoku/issues
+description:    Please see the README on GitHub at <https://github.com/thecentury/haskell-brickudoku#readme>
+homepage:       https://github.com/thecentury/haskell-brickudoku#readme
+bug-reports:    https://github.com/thecentury/haskell-brickudoku/issues
 author:         thecentury
 maintainer:     thecentury
 license:        MIT
@@ -18,20 +18,19 @@ tested-with:
     GHC==9.6.1
 extra-source-files:
     README.md
-    CHANGELOG.md
 
 source-repository head
   type: git
-  location: https://github.com/thecentury/haskell-blockudoku
+  location: https://github.com/thecentury/haskell-brickudoku
 
 library
   exposed-modules:
-      Blockudoku
+      Brickudoku
       MyPrelude
       UI
       Undo
   other-modules:
-      Paths_haskell_blockudoku
+      Paths_haskell_brickudoku
   hs-source-dirs:
       src
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
@@ -50,10 +49,10 @@ library
     , vty
   default-language: Haskell2010
 
-executable haskell-blockudoku-exe
+executable haskell-brickudoku-exe
   main-is: Main.hs
   other-modules:
-      Paths_haskell_blockudoku
+      Paths_haskell_brickudoku
   hs-source-dirs:
       app
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
@@ -63,7 +62,7 @@ executable haskell-blockudoku-exe
     , brick
     , containers
     , extra
-    , haskell-blockudoku
+    , haskell-brickudoku
     , lens
     , linear
     , mtl
@@ -73,11 +72,11 @@ executable haskell-blockudoku-exe
     , vty
   default-language: Haskell2010
 
-test-suite haskell-blockudoku-test
+test-suite haskell-brickudoku-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      Paths_haskell_blockudoku
+      Paths_haskell_brickudoku
   hs-source-dirs:
       test
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
@@ -87,7 +86,7 @@ test-suite haskell-blockudoku-test
     , brick
     , containers
     , extra
-    , haskell-blockudoku
+    , haskell-brickudoku
     , lens
     , linear
     , mtl

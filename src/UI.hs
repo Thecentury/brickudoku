@@ -83,7 +83,7 @@ keyBindings =
     (VtyEvent (V.EvKey V.KEsc []), [UserAction CancelPlacingFigure]),
     (VtyEvent (V.EvKey (V.KChar 'R') []), [SystemAction RestartGame]),
     (VtyEvent (V.EvKey (V.KChar 'A') []), [SystemAction ToggleAutoPlay]),
-    (VtyEvent (V.EvKey (V.KChar 'E') []), [SystemAction ToggleEasyMode]),
+    (VtyEvent (V.EvKey (V.KChar 'H') []), [SystemAction ToggleEasyMode]),
     (VtyEvent (V.EvKey (V.KChar 'u') []), [SystemAction Undo]),
     (VtyEvent (V.EvKey (V.KChar 'r') []), [SystemAction Redo]),
     (AppEvent Tick, [SystemAction NextAutoPlayTurn])
@@ -119,10 +119,9 @@ drawUI game =
       <=> padTop (Pad 1) figuresToPlaceWidgets
 
     rightColumn =
-      padLeft (Pad 2)
-      $ vBox [
+      vBox [
         drawScore game,
-        padTop (Pad 3) helpWidget
+        padTop (Pad 2) helpWidget
       ]
     
     figuresToPlaceWidgets =
@@ -197,6 +196,7 @@ helpWidget =
         str "Cancel placing figure: " <+> key "Esc",
         str "Restart game: . . . .  " <+> key "Shift" <+> str " + " <+> key "R",
         str "Toggle auto-play: . .  " <+> key "Shift" <+> str " + " <+> key "A",
+        str "Toggle hints: . . . .  " <+> key "Shift" <+> str " + " <+> key "H",
         str "Undo: . . . . . . . .  " <+> key "U",
         str "Redo: . . . . . . . .  " <+> key "R",
         str "Quit: . . . . . . . .  " <+> key "Shift" <+> str " + " <+> key "Q"
@@ -259,14 +259,14 @@ notSelectedCanNotBePlacedFigureBorderMappings =
 
 drawSomeFigureToPlace :: [(A.AttrName, V.Attr)] -> BS.BorderStyle -> (Cell -> Widget Name) -> Figure -> Widget Name
 drawSomeFigureToPlace mapping borderStyle drawOneCell figure =
- padLeftRight 2
- $ updateAttrMap (A.applyAttrMappings mapping)
- $ withBorderStyle borderStyle
- $ B.border
- $ hLimit 10
- $ vLimit 6
- $ C.center
- $ drawFigure drawOneCell figure
+  padLeftRight 2
+  $ updateAttrMap (A.applyAttrMappings mapping)
+  $ withBorderStyle borderStyle
+  $ B.border
+  $ hLimit 10
+  $ vLimit 6
+  $ C.center
+  $ drawFigure drawOneCell figure
 
 drawFigureToPlace :: Maybe (FigureToPlace FigureInSelection) -> Widget Name
 drawFigureToPlace Nothing                                                             = drawSomeFigureToPlace notSelectedCanBePlacedFigureBorderMappings BS.unicodeRounded (\_ -> withAttr emptyCellAttr $ str "  ") emptyFigure
@@ -355,12 +355,11 @@ main = do
   let builder = V.mkVty V.defaultConfig
   initialVty <- builder
   game <- initGame
-  -- Borrowed from https://magnus.therning.org/2023-04-26-some-practical-haskell.html
+  -- Idea borrowed from https://magnus.therning.org/2023-04-26-some-practical-haskell.html
   originalHandler <- getUncaughtExceptionHandler
   setUncaughtExceptionHandler $ handle originalHandler . lastExceptionHandler
   chan <- newBChan 10
-  -- todo increase the delay (to 100 ms?)
-  let delay = 20_000 -- 20 ms
+  let delay = 100_000 -- 100 ms
   void . forkIO $ forever $ do
     writeBChan chan Tick
     threadDelay delay

@@ -2,11 +2,16 @@ module MyPrelude
   ( mapArrayItem,
     mapiArray,
     (!),
-    mapi ) where
+    mapi,
+    width2d,
+    height2d ) where
 
 import Data.Array ( (//), Array, Ix, assocs, array, bounds, inRange )
 import qualified Data.Array as Array
 import GHC.Stack (HasCallStack)
+import Linear.V2 (V2(..))
+
+--------------------------------------------------------------------------------
 
 arrayItem :: HasCallStack => (Show i, Ix i) => Array i a -> i -> a
 arrayItem a i = 
@@ -30,3 +35,13 @@ mapiArray f a = array (bounds a) . map (\(i, e) -> (i, f i e)) . assocs $ a
 
 mapi :: (Int -> a -> b) -> [a] -> [b]
 mapi f = zipWith f [0..]
+
+width2d :: Array (V2 Int) a -> Int
+width2d a = x2 - x1 + 1
+  where
+    (V2 x1 _, V2 x2 _) = bounds a
+
+height2d :: Array (V2 Int) a -> Int
+height2d a = y2 - y1 + 1
+  where
+    (V2 _ y1, V2 _ y2) = bounds a

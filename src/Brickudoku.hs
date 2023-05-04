@@ -7,7 +7,6 @@ module Brickudoku
   ( Game,
     GameState(..),
     Figure,
-    CellCoord,
     FreeStyle(..),
     VisualCell(..),
     Cell(..),
@@ -15,6 +14,7 @@ module Brickudoku
     FigureToPlace(..),
     FigureToPlaceKind(..),
     HintPlacementResult(..),
+    Coord,
     cellsToDisplay,
     isGameOver,
     isPlacingFigure,
@@ -41,7 +41,7 @@ import Control.Monad (replicateM, join)
 import Data.List (find, sort, sortOn)
 import Data.Maybe (mapMaybe, isNothing, catMaybes, listToMaybe, fromMaybe)
 import Linear.V2 (V2(..), _x, _y)
-import MyPrelude ( mapiArray, (!), mapi )
+import MyPrelude ( mapiArray, (!), mapi, width2d, height2d )
 import qualified Data.Bifunctor
 import System.Random (randomRIO)
 import GHC.Stack (HasCallStack)
@@ -94,44 +94,27 @@ vectorRight = V2 1 0
 
 ---
 
--- todo use some V2 type from other brick applications?
-type CellCoord = (Int, Int)
+type Figure = Array Coord Cell
 
-coordToCellCoord :: Coord -> CellCoord
-coordToCellCoord (V2 x y) = (y, x)
-
-cellCoordToCoord :: CellCoord -> Coord
-cellCoordToCoord (y, x) = V2 x y
-
-row :: CellCoord -> Int
-row = fst
-
-col :: CellCoord -> Int
-col = snd
-
-type Figure = Array CellCoord Cell
-
-figureCellCoords :: Figure -> [CellCoord]
+figureCellCoords :: Figure -> [Coord]
 figureCellCoords = fmap fst . filter (\(_, e) -> e == Filled) . assocs
 
 type Board = Figure
 
-type PlacingCellsFigure = Array CellCoord VisualCell
+type PlacingCellsFigure = Array Coord VisualCell
 
 tryMoveFigure :: Board -> Figure -> Coord -> Coord -> Maybe Coord
 tryMoveFigure board figure coord vector =
   let
     newCoord = coord + vector
     figureSize = snd $ bounds figure
-    boardBounds = bounds board
-    boardTopLeft = fst boardBounds
-    boardBottomRight = snd boardBounds
+    (boardTopLeft, boardBottomRight) = bounds board
     topLeftWithinBoard =
-      newCoord ^. _x >= col boardTopLeft &&
-      newCoord ^. _y >= row boardTopLeft
+      newCoord ^. _x >= boardTopLeft ^. _x &&
+      newCoord ^. _y >= boardTopLeft ^. _y
     bottomRightWithinBoard =
-      newCoord ^. _x + col figureSize <= col boardBottomRight &&
-      newCoord ^. _y + row figureSize <= row boardBottomRight
+      newCoord ^. _x + figureSize ^. _x <= boardBottomRight ^. _x &&
+      newCoord ^. _y + figureSize ^. _y <= boardBottomRight ^. _y
   in
     if topLeftWithinBoard && bottomRightWithinBoard then
       Just newCoord
@@ -145,12 +128,12 @@ boardSize = 9
 figuresToPlaceCount = 3
 
 -- | Frees cells by specified coordinates
-freeAllCells :: Board -> [CellCoord] -> Board
+freeAllCells :: Board -> [Coord] -> Board
 freeAllCells b coords =
   b // fmap (, Free) coords
 
 -- | Determines whether all cells by specified coordinates are filled
-allCellsAreFilled :: HasCallStack => Figure -> [CellCoord] -> Bool
+allCellsAreFilled :: HasCallStack => Figure -> [Coord] -> Bool
 allCellsAreFilled fig coords =
   coords & fmap (fig !) & all (== Filled)
 
@@ -160,33 +143,34 @@ data RangeKind =
   Square
   deriving stock (Show, Eq)
 
-full9Ranges :: [(RangeKind, [CellCoord])]
+full9Ranges :: [(RangeKind, [Coord])]
 full9Ranges = allHorizontal ++ allVertical ++ squares where
-  horizontal r  = (Horizontal, fmap (r, ) all9)
-  vertical   c  = (Vertical, fmap (, c) all9)
+  horizontal y  = (Horizontal, fmap (`V2` y) all9)
+  vertical   x  = (Vertical, fmap (V2 x) all9)
   allHorizontal = fmap horizontal all9
   allVertical   = fmap vertical all9
   all9          = [0 .. boardSize - 1]
-  square startRow startColumn = (Square, [(startRow + r, startColumn + c) | r <- [0..2], c <- [0..2]])
+  square startRow startColumn = (Square, [V2 (startColumn + x) (startRow + y) | y <- [0..2], x <- [0..2]])
   squares       = [square (r * 3) (c * 3) | r <- [0..2], c <- [0..2]]
 
 -- | Finds ranges of cells that will be freed.
-rangesToBeFreed :: Board -> [(RangeKind, [CellCoord])]
+rangesToBeFreed :: HasCallStack => Board -> [(RangeKind, [Coord])]
 rangesToBeFreed b = filter (\(_, range) -> allCellsAreFilled b range) full9Ranges
 
-scoreIncrement :: [RangeKind] -> Int
+scoreIncrement :: HasCallStack => [RangeKind] -> Int
 scoreIncrement ranges = sum $ mapi (\i score -> (i + 1) * score) $ sort $ rangePrice <$> ranges where
   rangePrice Horizontal = 10
   rangePrice Vertical = 10
   rangePrice Square = 20
 
-removeFilledRanges :: Board -> Board
+removeFilledRanges :: HasCallStack => Board -> Board
 removeFilledRanges b = foldl (\b' (_, range) -> freeAllCells b' range) b $ rangesToBeFreed b
 
-possibleFigureStartCoordinates :: Board -> [Coord]
+possibleFigureStartCoordinates :: HasCallStack => Board -> [Coord]
 possibleFigureStartCoordinates b =
   [V2 x y | y <- [0 .. boardSize - figureHeight - 1], x <- [0 .. boardSize - figureWidth - 1]] where
-    (figureHeight, figureWidth) = snd $ bounds b
+    -- todo are width and height here correct?
+    (V2 figureHeight figureWidth) = snd $ bounds b
 
 pointsWhereFigureCanBePlaced :: HasCallStack => Figure -> Board -> [Coord]
 pointsWhereFigureCanBePlaced fig b =
@@ -198,20 +182,20 @@ canBePlacedToBoardAtSomePoint fig b =
 
 ----
 
-boardCellToPlacingCell :: Cell -> VisualCell
+boardCellToPlacingCell :: HasCallStack => Cell -> VisualCell
 boardCellToPlacingCell Free = VFree PrimaryStyle
 boardCellToPlacingCell Filled = VFilled
 
-boardToPlacingCells :: Board -> Array CellCoord VisualCell
+boardToPlacingCells :: HasCallStack => Board -> Array Coord VisualCell
 boardToPlacingCells board =
   board
   & assocs
   & map (Data.Bifunctor.second boardCellToPlacingCell)
   & array (bounds board)
 
-addAltStyleCells :: Array CellCoord VisualCell -> Array CellCoord VisualCell
+addAltStyleCells :: HasCallStack => Array Coord VisualCell -> Array Coord VisualCell
 addAltStyleCells cells = cells // mapMaybe addAltStyleCell (assocs cells) where
-  addAltStyleCell :: (CellCoord, VisualCell) -> Maybe (CellCoord, VisualCell)
+  addAltStyleCell :: (Coord, VisualCell) -> Maybe (Coord, VisualCell)
   addAltStyleCell (coord, VFree PrimaryStyle) =
     if isAltStyleCell coord then
       Just (coord, VFree AltStyle)
@@ -219,8 +203,8 @@ addAltStyleCells cells = cells // mapMaybe addAltStyleCell (assocs cells) where
       Nothing
   addAltStyleCell _ = Nothing
 
-  isAltStyleCell :: CellCoord -> Bool
-  isAltStyleCell (r, c) = isAltStyleCellThick (thickColumnNumber c) (thickColumnNumber r)
+  isAltStyleCell :: Coord -> Bool
+  isAltStyleCell (V2 x y) = isAltStyleCellThick (thickColumnNumber x) (thickColumnNumber y)
 
   isAltStyleCellThick 0 1 = True 
   isAltStyleCellThick 1 0 = True 
@@ -231,20 +215,16 @@ addAltStyleCells cells = cells // mapMaybe addAltStyleCell (assocs cells) where
   thickColumnNumber :: Int -> Int
   thickColumnNumber x = x `div` 3
 
-markFigureAsPlaced :: FigureInSelection -> Array FigureIndex (Maybe FigureInSelection) -> Array FigureIndex (Maybe FigureInSelection)
+markFigureAsPlaced :: HasCallStack => FigureInSelection -> Array FigureIndex (Maybe FigureInSelection) -> Array FigureIndex (Maybe FigureInSelection)
 markFigureAsPlaced (FigureInSelection _ ix) figures = figures // [(ix, Nothing)]
 
 tryPlaceFigure :: HasCallStack => Figure -> Coord -> Board -> Maybe Figure
 tryPlaceFigure figure figureCoord board =
-  let
-    figureCells = newCoord <$> figureCellCoords figure
-  in
-    tryPlace board figureCells
+  tryPlace board figureCells
   where
-    newCoord :: CellCoord -> CellCoord
-    newCoord (r, c) = (r + figureCoord ^. _y, c + figureCoord ^. _x)
+    figureCells = (+ figureCoord) <$> figureCellCoords figure
 
-    tryPlace :: Figure -> [CellCoord] -> Maybe Figure
+    tryPlace :: Figure -> [Coord] -> Maybe Figure
     tryPlace b [] = Just b
     tryPlace b (coord : coords) =
       case b ! coord of
@@ -267,12 +247,12 @@ addPlacingFigure figure figureCoord board =
 
     toBeFreedCells = (, VWillBeFreed) <$> rangesWillBeFreed
 
-    newCoord :: CellCoord -> CellCoord
-    newCoord (r, c) = (r + figureCoord ^. _y, c + figureCoord ^. _x)
+    newCoord :: Coord -> Coord
+    newCoord c = c + figureCoord
 
     canPlaceFullFigure = all (\coord -> board ! coord == Free) $ newCoord <$> figureCellCoords figure
 
-    figureCell :: CellCoord -> Cell -> VisualCell
+    figureCell :: HasCallStack => Coord -> Cell -> VisualCell
     figureCell boardCoord figCell =
       case (board ! boardCoord, figCell, canPlaceFullFigure) of
         (Filled, Filled, _)     -> VCannotPlace
@@ -337,7 +317,7 @@ currentGame :: Lens' Game VersionedState
 currentGame = history . current
 
 -- | Puts the new version of the game to the history
-putNewVersion :: Game -> (VersionedState -> VersionedState) -> Game
+putNewVersion :: HasCallStack => Game -> (VersionedState -> VersionedState) -> Game
 putNewVersion g f = history %~ updateCurrent' $ g where
   updateCurrent' :: History VersionedState -> History VersionedState
   updateCurrent' = put newCurrent
@@ -345,7 +325,7 @@ putNewVersion g f = history %~ updateCurrent' $ g where
   newCurrent = f $ g ^. currentGame
 
 -- | Updates the current version of the game without putting it to the history
-updateCurrentNotVersioned :: Game -> (VersionedState -> VersionedState) -> Game
+updateCurrentNotVersioned :: HasCallStack => Game -> (VersionedState -> VersionedState) -> Game
 updateCurrentNotVersioned g f = g & currentGame %~ f
 
 isGameOver :: Game -> Bool
@@ -358,18 +338,18 @@ isPlacingFigure game = case game ^. currentGame . state of
   PlacingFigure _ _ -> True
   _ -> False
 
-mergeCellHelpingHighlight :: VisualCell -> VisualCell -> VisualCell
+mergeCellHelpingHighlight :: HasCallStack => VisualCell -> VisualCell -> VisualCell
 mergeCellHelpingHighlight (VFree style) (VCanBePlacedHint _ result) = VCanBePlacedHint style result
 mergeCellHelpingHighlight existing _ = existing
 
-addHelpHighlightForFigure :: HasCallStack => Board -> Figure -> Array CellCoord VisualCell -> Array CellCoord VisualCell
+addHelpHighlightForFigure :: HasCallStack => HasCallStack => Board -> Figure -> Array Coord VisualCell -> Array Coord VisualCell
 addHelpHighlightForFigure b fig cells =
   cells // mergedCellsToUpdate where
-    figureCoords = cellCoordToCoord <$> figureCellCoords fig
+    figureCoords = figureCellCoords fig
     canBePlaced = (\startPos -> (startPos, (+ startPos) <$> figureCoords)) <$> pointsWhereFigureCanBePlaced fig b
     currentCells = 
       concatMap (\(startCoord, coords) -> 
-        (\coord -> (startCoord, coordToCellCoord coord, cells ! coordToCellCoord coord)) <$> coords) 
+        (\coord -> (startCoord, coord, cells ! coord)) <$> coords) 
         canBePlaced
     -- Here single coordinate can occur multiple times, need to merge the cells
     cellsToUpdate =
@@ -392,7 +372,7 @@ addHelpHighlightForFigure b fig cells =
             Region
         Nothing -> JustFigure
 
-addHelpHighlight :: Game -> Array CellCoord VisualCell -> Array CellCoord VisualCell
+addHelpHighlight :: HasCallStack => Game -> Array Coord VisualCell -> Array Coord VisualCell
 addHelpHighlight g cells | not (g ^. easyMode) = cells
 addHelpHighlight (Game (History (VersionedState _ _ _ GameOver _) _ _) _ _) cells = cells
 addHelpHighlight (Game (History (VersionedState _ b _ (SelectingFigure (FigureInSelection fig _)) _) _ _) _ _) cells =
@@ -400,7 +380,7 @@ addHelpHighlight (Game (History (VersionedState _ b _ (SelectingFigure (FigureIn
 addHelpHighlight (Game (History (VersionedState _ b _ (PlacingFigure (FigureInSelection fig _) _) _) _ _) _ _) cells =
   addHelpHighlightForFigure b fig cells
 
-cellsToDisplay :: Game -> PlacingCellsFigure
+cellsToDisplay :: HasCallStack => Game -> PlacingCellsFigure
 cellsToDisplay game = case game ^. currentGame . state of
   PlacingFigure (FigureInSelection figure _) coord -> 
     wrap $ addPlacingFigure figure coord brd
@@ -410,7 +390,7 @@ cellsToDisplay game = case game ^. currentGame . state of
     wrap cells = addHelpHighlight game $ addAltStyleCells cells
     brd = game ^. currentGame . board
       
-figuresToPlace :: Game -> [Maybe (FigureToPlace FigureInSelection)]
+figuresToPlace :: HasCallStack => Game -> [Maybe (FigureToPlace FigureInSelection)]
 figuresToPlace game =
   game ^. currentGame 
   & _figures
@@ -505,21 +485,21 @@ possibleFiguresData =
     ]
   ]
 
-mkFigure :: [[Int]] -> Figure
+mkFigure :: HasCallStack => [[Int]] -> Figure
 mkFigure idx =
-  array ((0, 0), (figureHeight - 1, figureWidth - 1)) [((r, c), intToCell $ numberAt (r, c)) | r <- [0 .. figureHeight - 1], c <- [0 .. figureWidth - 1]]
+  array (V2 0 0, V2 (figureWidth - 1) (figureHeight - 1)) [(V2 x y, intToCell $ numberAt (V2 x y)) | y <- [0 .. figureHeight - 1], x <- [0 .. figureWidth - 1]]
   where
     figureHeight = length idx
     figureWidth = length (head idx)
 
-    numberAt :: CellCoord -> Int
-    numberAt (r, c) = (idx !! r) !! c
+    numberAt :: Coord -> Int
+    numberAt (V2 x y) = (idx !! y) !! x
 
     intToCell :: Int -> Cell
     intToCell 0 = Free
     intToCell _ = Filled
 
-possibleFigures :: [Figure]
+possibleFigures :: HasCallStack => [Figure]
 possibleFigures = map mkFigure possibleFiguresData
 
 emptyFigure :: Figure
@@ -527,15 +507,14 @@ emptyFigure = mkFigure [[0]]
 
 rotateFigureClockwise :: HasCallStack => Figure -> Figure
 rotateFigureClockwise f =
-  array ((0, 0), (newHeight - 1, newWidth - 1)) [((c, figureHeight - 1 - r), f ! (r, c)) | r <- [0 .. figureHeight - 1], c <- [0 .. figureWidth - 1]]
+  array (V2 0 0, V2 (newWidth - 1) (newHeight - 1)) [(V2 y (figureHeight - 1 - y), f ! V2 x y) | y <- [0 .. figureHeight - 1], x <- [0 .. figureWidth - 1]]
     where
-      upperBound = snd $ bounds f
-      figureWidth = snd upperBound + 1
-      figureHeight = fst upperBound + 1
+      figureWidth = width2d f
+      figureHeight = height2d f
       newWidth = figureHeight
       newHeight = figureWidth
 
-randomRawFigure :: IO Figure
+randomRawFigure :: HasCallStack => IO Figure
 randomRawFigure = do
   ix <- uniformRM (0, length possibleFigures - 1) globalStdGen
   rotations <- uniformRM (0 :: Int, 3) globalStdGen
@@ -544,16 +523,19 @@ randomRawFigure = do
 
 ---
 
-randomFigures :: IO (Array Int FigureInSelection)
+randomFigures :: HasCallStack => IO (Array Int FigureInSelection)
 randomFigures = do
   rawFigures <- replicateM figuresToPlaceCount randomRawFigure
   pure $ mapiArray (flip FigureInSelection) $ listArray (0, figuresToPlaceCount - 1) rawFigures
 
-initGame :: IO Game
+initGame :: HasCallStack => IO Game
 initGame = do
+  putStrLn "Before _board"
   let _board =
-        array ((0, 0), (boardSize - 1, boardSize - 1))
-          [((i, j), Free) | i <- [0 .. boardSize - 1], j <- [0 .. boardSize - 1]]
+        array 
+          (V2 0 0, V2 (boardSize - 1) (boardSize - 1))
+          [(V2 x y, Free) | x <- [0 .. boardSize - 1], y <- [0 .. boardSize - 1]]
+  putStrLn "Before randomFigures"
   boardFigures <- randomFigures
   let justFigures = Just <$> boardFigures
   let coreGame = VersionedState
@@ -568,17 +550,15 @@ initGame = do
           _easyMode = False }
   return game
 
-rowCells :: HasCallStack => Int -> Array CellCoord a -> [a]
+rowCells :: HasCallStack => Int -> Array Coord a -> [a]
 rowCells rowIndex f =
-  [f ! (rowIndex, c) | c <- [0 .. figureWidth - 1]]
+  [f ! V2 x rowIndex | x <- [0 .. figureWidth - 1]]
     where
-      upperBound  = snd $ bounds f
-      figureWidth = snd upperBound + 1
+      figureWidth = width2d f
 
-figureRows :: Array CellCoord a -> [[a]]
-figureRows f = map (`rowCells` f) rowIndices where
-  upperBound = snd $ bounds f
-  figureHeight = fst upperBound + 1
+figureRows :: HasCallStack => Array Coord a -> [[a]]
+figureRows f = (`rowCells` f) <$> rowIndices where
+  figureHeight = height2d f
   rowIndices = [0 .. figureHeight - 1]
 
 --- Event handling ---
@@ -691,7 +671,7 @@ possibleActionsImpl game generateAutoPlay = do
             redoAction game
           ]
 
-      moveFigure :: Action -> (FigureIndex -> [FigureIndex]) -> Maybe (Action, Game)
+      moveFigure :: HasCallStack => Action -> (FigureIndex -> [FigureIndex]) -> Maybe (Action, Game)
       moveFigure action calculateNextIndices = do
         let nextIndices = calculateNextIndices figureIndex
         nextFigure <- tryFindNextFigureToSelect (game ^. currentGame . board) (game ^. currentGame . figures) nextIndices
@@ -706,7 +686,7 @@ possibleActionsImpl game generateAutoPlay = do
     PlacingFigure figure@(FigureInSelection selectedFigure figureIndex) coord -> actions where
       board_ = game ^. currentGame . board
 
-      tryMove :: Coord -> Action -> Maybe (Action, Game)
+      tryMove :: HasCallStack => Coord -> Action -> Maybe (Action, Game)
       tryMove movement action = do
         newCoord <- tryMoveFigure board_ selectedFigure coord movement
         let game' = updateCurrentNotVersioned game $ state .~ PlacingFigure figure newCoord

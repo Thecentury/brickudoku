@@ -7,10 +7,10 @@ import Brickudoku
   ( Game,
     GameState(..),
     Figure,
-    CellCoord,
     FreeStyle(..),
     VisualCell(..),
     Cell(..),
+    Coord,
     cellsToDisplay,
     UserAction(..),
     SystemAction(..),
@@ -52,6 +52,7 @@ import qualified Graphics.Vty as V
 import Data.Array (elems, Array)
 import Data.Functor (void)
 import Data.List.Extra (chunksOf)
+import GHC.Stack (HasCallStack)
 import GHC.Conc.Sync (getUncaughtExceptionHandler, setUncaughtExceptionHandler)
 import Control.Exception (SomeException, Exception (displayException), handle)
 import Data.Map (Map)
@@ -89,7 +90,7 @@ keyBindings =
     (AppEvent Tick, [SystemAction NextAutoPlayTurn])
   ]
 
-handleEvent :: BrickEvent Name GameEvent -> EventM Name Game ()
+handleEvent :: HasCallStack => BrickEvent Name GameEvent -> EventM Name Game ()
 handleEvent (VtyEvent (V.EvKey (V.KChar 'Q') [])) = halt
 handleEvent evt = do
   game <- get
@@ -105,7 +106,7 @@ handleEvent evt = do
           _ -> error $ "Multiple applicable actions for key " ++ show evt ++ ": " ++ show (fmap fst actionsToApply)
     Nothing -> pure ()
 
-drawUI :: Game -> [Widget Name]
+drawUI :: HasCallStack => Game -> [Widget Name]
 drawUI game =
   [
     gameOverWidget,
@@ -183,7 +184,7 @@ drawUI game =
       else  
         hLimit 60 widget
 
-drawScore :: Game -> Widget Name
+drawScore :: HasCallStack => Game -> Widget Name
 drawScore game =
   padTop (Pad 1)
   $ hLimit 9
@@ -220,7 +221,7 @@ helpWidget =
       ]
     key k = withAttr helpShortcutAttr $ str k
 
-drawGrid :: Game -> Widget Name
+drawGrid :: HasCallStack => Game -> Widget Name
 drawGrid game =
   withBorderStyle BS.unicodeRounded
   $ joinBorders
@@ -238,7 +239,7 @@ hintWidget = str "··"
 hintWillFreeWidget :: Widget n
 hintWillFreeWidget = str "◤◢"
 
-drawPlacingCell :: VisualCell -> Widget Name
+drawPlacingCell :: HasCallStack => VisualCell -> Widget Name
 drawPlacingCell (VFree PrimaryStyle) = withAttr emptyCellAttr cellWidget
 drawPlacingCell (VFree AltStyle)     = withAttr emptyAltStyleCellAttr cellWidget
 drawPlacingCell VFilled = withAttr filledCellAttr cellWidget
@@ -251,7 +252,7 @@ drawPlacingCell (VCanBePlacedHint AltStyle     JustFigure) = withAttr canBePlace
 drawPlacingCell (VCanBePlacedHint PrimaryStyle Region)     = withAttr canBePlacedWillFreeHintAttr hintWillFreeWidget
 drawPlacingCell (VCanBePlacedHint AltStyle     Region)     = withAttr canBePlacedWillFreeHintAltStyleAttr hintWillFreeWidget
 
-drawFigure :: (a -> Widget Name) -> Array CellCoord a -> Widget Name
+drawFigure :: HasCallStack => (a -> Widget Name) -> Array Coord a -> Widget Name
 drawFigure drawOneCell figure = vBox cellRows where
   cellRows = hBox . map drawOneCell <$> figureRows figure
 
@@ -274,7 +275,7 @@ notSelectedCanNotBePlacedFigureBorderMappings =
       (filledCellAttr, V.white `on` V.white)
     ]
 
-drawSomeFigureToPlace :: [(A.AttrName, V.Attr)] -> BS.BorderStyle -> (Cell -> Widget Name) -> Figure -> Widget Name
+drawSomeFigureToPlace :: HasCallStack => [(A.AttrName, V.Attr)] -> BS.BorderStyle -> (Cell -> Widget Name) -> Figure -> Widget Name
 drawSomeFigureToPlace mapping borderStyle drawOneCell figure =
   padLeftRight 2
   $ updateAttrMap (A.applyAttrMappings mapping)
@@ -285,14 +286,14 @@ drawSomeFigureToPlace mapping borderStyle drawOneCell figure =
   $ C.center
   $ drawFigure drawOneCell figure
 
-drawFigureToPlace :: Maybe (FigureToPlace FigureInSelection) -> Widget Name
+drawFigureToPlace :: HasCallStack => Maybe (FigureToPlace FigureInSelection) -> Widget Name
 drawFigureToPlace Nothing                                                             = drawSomeFigureToPlace notSelectedCanBePlacedFigureBorderMappings BS.unicodeRounded (\_ -> withAttr emptyCellAttr $ str "  ") emptyFigure
 drawFigureToPlace (Just (FigureToPlace (FigureInSelection figure _) Selected))        = drawSomeFigureToPlace selectedFigureBorderMappings BS.unicodeBold drawCell figure
 drawFigureToPlace (Just (FigureToPlace (FigureInSelection figure _) SelectedPlacing)) = drawSomeFigureToPlace selectedPlacingFigureBorderMappings BS.unicodeBold drawCell figure
 drawFigureToPlace (Just (FigureToPlace (FigureInSelection figure _) CanBePlaced))     = drawSomeFigureToPlace notSelectedCanBePlacedFigureBorderMappings BS.unicodeRounded drawCell figure
 drawFigureToPlace (Just (FigureToPlace (FigureInSelection figure _) CannotBePlaced))  = drawSomeFigureToPlace notSelectedCanNotBePlacedFigureBorderMappings BS.unicodeRounded drawCell figure
 
-drawCell :: Cell -> Widget Name
+drawCell :: HasCallStack => Cell -> Widget Name
 drawCell Free = withAttr emptyCellAttr cellWidget
 drawCell Filled = withAttr filledCellAttr cellWidget
 
@@ -369,9 +370,13 @@ lastExceptionHandler e = do
 
 main :: IO ()
 main = do
+  putStrLn "Initializing..."
   let builder = V.mkVty V.defaultConfig
+  putStrLn "Building initial Vty..."
   initialVty <- builder
+  putStrLn "Initializing game..."
   game <- initGame
+  putStrLn "Starting game..."
   -- Idea borrowed from https://magnus.therning.org/2023-04-26-some-practical-haskell.html
   originalHandler <- getUncaughtExceptionHandler
   setUncaughtExceptionHandler $ handle originalHandler . lastExceptionHandler

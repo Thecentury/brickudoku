@@ -5,6 +5,8 @@ module Primitives where
 
 import Linear.V2 (V2(..))
 
+--------------------------------------------------------------------------------
+
 type Coord = V2 Int
 
 zeroCoord :: Coord

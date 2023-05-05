@@ -16,7 +16,7 @@ extra-source-files:
 # common to point users to the README.md file.
 description:         Please see the README on GitHub at <https://github.com/thecentury/brickudoku#readme>
 
-tested-with: GHC==9.6.1
+tested-with: GHC==9.2.7
 
 dependencies:
   - base >= 4.7 && < 5
@@ -76,5 +76,4 @@ tests:
       - -rtsopts
       - -with-rtsopts=-N
     dependencies:
-      - brickudoku
       - sandwich

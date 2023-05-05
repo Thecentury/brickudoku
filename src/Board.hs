@@ -205,7 +205,9 @@ emptyFigure = mkFigure [[0]]
 
 rotateFigureClockwise :: HasCallStack => Figure -> Figure
 rotateFigureClockwise f =
-  array (V2 0 0, V2 (newWidth - 1) (newHeight - 1)) [(V2 x (figureHeight - 1 - y), f ! V2 x y) | y <- [0 .. figureHeight - 1], x <- [0 .. figureWidth - 1]]
+  array 
+    (V2 0 0, V2 (newWidth - 1) (newHeight - 1))
+    [(V2 (figureHeight - 1 - y) x, f ! V2 x y) | y <- [0 .. figureHeight - 1], x <- [0 .. figureWidth - 1]]
     where
       figureWidth = width2d f
       figureHeight = height2d f

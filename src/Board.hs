@@ -6,7 +6,7 @@ module Board where
 
 import Control.Lens ( (&), (^.) )
 import Data.Array ( (//), array, bounds, Array, assocs )
-import System.Random.Stateful ( globalStdGen, UniformRange(uniformRM) )
+import System.Random.Stateful ( UniformRange(uniformRM), StatefulGen )
 import Data.Maybe (mapMaybe)
 import Linear.V2 (V2(..), _x, _y)
 import MyPrelude ( (!), width2d, height2d )
@@ -226,9 +226,9 @@ rotateFigureClockwise f =
 rotateFigureNTimes :: HasCallStack => Int -> Figure -> Figure
 rotateFigureNTimes n f = iterate rotateFigureClockwise f !! n
 
-randomRawFigure :: HasCallStack => IO Figure
-randomRawFigure = do
-  ix <- uniformRM (0, length possibleFigures - 1) globalStdGen
-  rotations <- uniformRM (0 :: Int, 3) globalStdGen
+randomRawFigure :: (HasCallStack, StatefulGen g m) => g -> m Figure
+randomRawFigure gen = do
+  ix <- uniformRM (0, length possibleFigures - 1) gen
+  rotations <- uniformRM (0 :: Int, 3) gen
   let figure = possibleFigures !! ix
-  return $ rotateFigureNTimes rotations figure
+  pure $ rotateFigureNTimes rotations figure

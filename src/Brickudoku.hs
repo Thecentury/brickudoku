@@ -3,6 +3,7 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE LambdaCase #-}
+
 module Brickudoku
   ( Game,
     GameState(..),
@@ -41,7 +42,6 @@ import Data.List (find, sort, sortOn)
 import Data.Maybe (mapMaybe, isNothing, catMaybes, listToMaybe, fromMaybe)
 import Linear.V2 (V2(..))
 import qualified Data.Bifunctor
-import System.Random (randomRIO)
 import GHC.Stack (HasCallStack)
 import Data.List.Extra (groupOnKey)
 
@@ -49,6 +49,7 @@ import MyPrelude ( mapiArray, (!), mapi, width2d, height2d )
 import Undo (History(..), newHistory, put, current, tryUndoUntilDifferentL, tryRedoUntilDifferentL)
 import Primitives
 import Board
+import System.Random.Stateful (StatefulGen, UniformRange (uniformRM))
 
 ----
 
@@ -278,18 +279,18 @@ figuresToPlace game =
 
 ---
 
-randomFigures :: HasCallStack => IO (Array Int FigureInSelection)
-randomFigures = do
-  rawFigures <- replicateM figuresToPlaceCount randomRawFigure
+randomFigures :: (HasCallStack, StatefulGen g m) => g -> m (Array Int FigureInSelection)
+randomFigures gen = do
+  rawFigures <- replicateM figuresToPlaceCount (randomRawFigure gen)
   pure $ mapiArray (flip FigureInSelection) $ listArray (0, figuresToPlaceCount - 1) rawFigures
 
-initGame :: HasCallStack => IO Game
-initGame = do
+initGame :: (HasCallStack, StatefulGen g m) => g -> m Game
+initGame gen = do
   let _board =
         array 
           (V2 0 0, V2 (boardSize - 1) (boardSize - 1))
           [(V2 x y, Free) | x <- [0 .. boardSize - 1], y <- [0 .. boardSize - 1]]
-  boardFigures <- randomFigures
+  boardFigures <- randomFigures gen
   let justFigures = Just <$> boardFigures
   let coreGame = VersionedState
         { _score = 0,
@@ -371,46 +372,47 @@ userActionProbability PlaceFigure = 30
 userActionProbability CancelPlacingFigure = 1
 userActionProbability _ = 10
 
-restartGameAction :: IO (Maybe (Action, Game))
-restartGameAction = (\g -> Just (SystemAction RestartGame, g)) <$> initGame
+restartGameAction :: StatefulGen g m => g -> m (Maybe (Action, Game))
+restartGameAction gen = (\g -> Just (SystemAction RestartGame, g)) <$> initGame gen
 
 toggleAutoPlayAction :: Game -> Maybe (Action, Game)
 toggleAutoPlayAction game =
   Just (SystemAction ToggleAutoPlay, game & autoPlay %~ not)
 
-nextAutoPlayTurnAction :: Game -> Bool -> IO (Maybe (Action, Game))
-nextAutoPlayTurnAction game generateAutoPlay = do
+nextAutoPlayTurnAction :: StatefulGen g m => g -> Game -> Bool -> m (Maybe (Action, Game))
+nextAutoPlayTurnAction gen game generateAutoPlay = do
   if game ^. autoPlay && generateAutoPlay then
-    nextAction
+    nextAction gen
   else
     pure Nothing
   where
-    nextAction :: IO (Maybe (Action, Game))
-    nextAction = do
-      actions <- possibleActionsImpl game False
+    nextAction :: StatefulGen g m => g -> m (Maybe (Action, Game))
+    nextAction gen' = do
+      actions <- possibleActionsImpl gen' game False
       let applicableActions = mapMaybe (\(a, g) -> (, g) <$> onlyUserAction a) actions
       if null applicableActions then
         pure Nothing
       else do
-        (_, game') <- randomElement $ actionsAccordingToProbability applicableActions
+        (_, game') <- randomElement gen' $ actionsAccordingToProbability applicableActions
         pure $ Just (SystemAction NextAutoPlayTurn, game')
 
 actionsAccordingToProbability :: [(UserAction, a)] -> [(UserAction, a)]
 actionsAccordingToProbability = concatMap (\(action, game) -> replicate (userActionProbability action) (action, game))
 
-randomElement :: [a] -> IO a
-randomElement list = do
-  -- store RNG in the Game, use randomR
-  randomIndex <- randomRIO (0, length list - 1)
+randomElement :: StatefulGen g m => g -> [a] -> m a
+randomElement gen list = do
+  randomIndex <- uniformRM (0, length list - 1) gen
   pure $ list !! randomIndex
 
-possibleActionsImpl :: HasCallStack => Game -> Bool -> IO [(Action, Game)]
-possibleActionsImpl game generateAutoPlay = do
+-- todo create own monad/type like Tetris does?
+-- todo merge with 'possibleActions'?
+possibleActionsImpl :: StatefulGen g m => g -> Game -> Bool -> m [(Action, Game)]
+possibleActionsImpl gen game generateAutoPlay = do
   case game ^. currentGame . state of
     SelectingFigure figure@(FigureInSelection selectedFigure figureIndex) -> actions where
       actions = do
-        newGame <- restartGameAction
-        autoPlayTurn <- nextAutoPlayTurnAction game generateAutoPlay
+        newGame <- restartGameAction gen
+        autoPlayTurn <- nextAutoPlayTurnAction gen game generateAutoPlay
         pure $ catMaybes
           [
             moveFigure (UserAction SelectNextFigure) nextFigureIndices,
@@ -436,7 +438,7 @@ possibleActionsImpl game generateAutoPlay = do
         let game' = updateCurrentNotVersioned game $ state .~ PlacingFigure figure coord
         pure (UserAction StartPlacingFigure, game')
 
-    PlacingFigure figure@(FigureInSelection selectedFigure figureIndex) coord -> actions where
+    PlacingFigure figure@(FigureInSelection selectedFigure figureIndex) coord -> actions gen where
       board_ = game ^. currentGame . board
 
       tryMove :: Coord -> Action -> Maybe (Action, Game)
@@ -445,15 +447,15 @@ possibleActionsImpl game generateAutoPlay = do
         let game' = updateCurrentNotVersioned game $ state .~ PlacingFigure figure newCoord
         pure (action, game')
 
-      placeFigureAction :: HasCallStack => IO (Maybe (Action, Game))
-      placeFigureAction = do
+      placeFigureAction :: StatefulGen g m => g -> m (Maybe (Action, Game))
+      placeFigureAction gen' = do
         case tryPlaceFigure selectedFigure coord board_ of
           Nothing -> pure Nothing
           Just newBoard -> do
             let figuresWithSelectedPlaced = markFigureAsPlaced figure $ game ^. currentGame . figures
             (newFigures, turnIncrement, nextIndices) <-
               if allPlaced $ elems figuresWithSelectedPlaced then
-                fmap (, 1, [0 .. figuresToPlaceCount - 1]) $ fmap Just <$> randomFigures
+                fmap (, 1, [0 .. figuresToPlaceCount - 1]) $ fmap Just <$> randomFigures gen'
               else
                 pure (figuresWithSelectedPlaced, 0, nextFigureIndices figureIndex)
             let scoreIncr = scoreIncrement $ fst <$> rangesToBeFreed newBoard
@@ -475,11 +477,11 @@ possibleActionsImpl game generateAutoPlay = do
                 let game' = putNewVersion game $ const $ state .~ GameOver $ state' in
                 Just (UserAction PlaceFigure, game')
 
-      actions :: HasCallStack => IO [(Action, Game)]
-      actions = do
-        placeAction <- placeFigureAction
-        newGame <- restartGameAction
-        autoPlayTurn <- nextAutoPlayTurnAction game generateAutoPlay
+      actions :: StatefulGen g m => g -> m [(Action, Game)]
+      actions gen' = do
+        placeAction <- placeFigureAction gen'
+        newGame <- restartGameAction gen'
+        autoPlayTurn <- nextAutoPlayTurnAction gen' game generateAutoPlay
         pure $ catMaybes [
             tryMove vectorRight $ UserAction MoveFigureRight,
             tryMove vectorLeft $ UserAction MoveFigureLeft,
@@ -495,7 +497,7 @@ possibleActionsImpl game generateAutoPlay = do
             Just (UserAction CancelPlacingFigure, updateCurrentNotVersioned game $ state .~ SelectingFigure figure)
           ]
     GameOver -> do
-      newGame <- restartGameAction
+      newGame <- restartGameAction gen
       pure $ catMaybes [
           newGame,
           undoAction game,
@@ -520,5 +522,5 @@ toggleEasyModeAction game =
   Just (SystemAction ToggleEasyMode, game') where
     game' = game & easyMode %~ not 
 
-possibleActions :: Game -> IO [(Action, Game)]
-possibleActions game = possibleActionsImpl game True
+possibleActions :: StatefulGen g m => Game -> g -> m [(Action, Game)]
+possibleActions game gen = possibleActionsImpl gen game True

@@ -1,11 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NumericUnderscores #-}
-{-# OPTIONS_GHC -Wno-unused-imports #-}
 module UI (main) where
 
 import Brickudoku
   ( Game,
-    GameState(..),
     Figure,
     FreeStyle(..),
     VisualCell(..),
@@ -26,32 +24,29 @@ import Brickudoku
     possibleActions,
     isGameOver,
     isPlacingFigure,
-    boardSize,
     autoPlay,
     GameEvent (..),
     FigureInSelection(..),
     currentGame,
     HintPlacementResult (..) )
 
-import Control.Monad.State.Strict
-    ( MonadIO(liftIO), MonadState(put, get) )
+import Control.Monad.State.Strict ( MonadState(put, get) )
 import Brick
   ( App(..), AttrMap, BrickEvent(..), EventM, Widget
   , customMain, neverShowCursor
   , halt
-  , hLimit, vBox, hBox, padRight, padLeft, padTop, padAll, Padding(..)
+  , hLimit, vBox, hBox, padLeft, padTop, padAll, Padding(..)
   , withBorderStyle, str
   , attrMap, withAttr, emptyWidget, AttrName, on, fg, bg
-  , (<+>), (<=>), attrName, joinBorders, padLeftRight, vLimit, updateAttrMap)
+  , (<+>), (<=>), attrName, joinBorders, padLeftRight, vLimit, updateAttrMap )
 import qualified Brick.AttrMap as A
 import qualified Brick.Widgets.Border as B
 import qualified Brick.Widgets.Border.Style as BS
 import qualified Brick.Widgets.Center as C
-import Control.Lens ((^.), (&))
+import Control.Lens ((^.))
 import qualified Graphics.Vty as V
-import Data.Array (elems, Array)
+import Data.Array (Array)
 import Data.Functor (void)
-import Data.List.Extra (chunksOf)
 import GHC.Stack (HasCallStack)
 import GHC.Conc.Sync (getUncaughtExceptionHandler, setUncaughtExceptionHandler)
 import Control.Exception (SomeException, Exception (displayException), handle)
@@ -60,12 +55,11 @@ import qualified Data.Map as Map
 import Brick.BChan (newBChan, writeBChan)
 import Control.Concurrent (threadDelay, forkIO)
 import Control.Monad (forever)
-import Data.List (intercalate)
-import Brick.Widgets.Border (joinableBorder)
+import System.Random.Stateful (mkStdGen, runStateGen, StdGen)
 
 type Name = ()
 
-app :: App Game GameEvent Name
+app :: App FullGameState GameEvent Name
 app = App { appDraw = drawUI
           , appChooseCursor = neverShowCursor
           , appHandleEvent = handleEvent
@@ -90,11 +84,11 @@ keyBindings =
     (AppEvent Tick, [SystemAction NextAutoPlayTurn])
   ]
 
-handleEvent :: HasCallStack => BrickEvent Name GameEvent -> EventM Name Game ()
+handleEvent :: HasCallStack => BrickEvent Name GameEvent -> EventM Name FullGameState ()
 handleEvent (VtyEvent (V.EvKey (V.KChar 'Q') [])) = halt
 handleEvent evt = do
-  game <- get
-  actions <- liftIO $ possibleActions game
+  (FullGameState game gen) <- get
+  let (actions, gen') = runStateGen gen (possibleActions game)
   case Map.lookup evt keyBindings of
     Just applicableKeyBindingActions ->
       let
@@ -102,12 +96,12 @@ handleEvent evt = do
       in
         case actionsToApply of
           [] -> pure ()
-          [(_, newGame)] -> put newGame
+          [(_, newGame)] -> put $ FullGameState newGame gen'
           _ -> error $ "Multiple applicable actions for key " ++ show evt ++ ": " ++ show (fmap fst actionsToApply)
     Nothing -> pure ()
 
-drawUI :: HasCallStack => Game -> [Widget Name]
-drawUI game =
+drawUI :: HasCallStack => FullGameState -> [Widget Name]
+drawUI (FullGameState game _) =
   [
     gameOverWidget,
     C.center $ withAutoPlayStyle $ applyGameOverPalette $ centralColumn <+> padTop rightColumnTopPadding (padLeft (Pad 2) rightColumn)
@@ -362,6 +356,10 @@ gameOverMap =
     (helpShortcutAttr, fg V.brightBlack)
   ]
 
+data FullGameState = FullGameState 
+  { _game :: Game, 
+    _rng :: StdGen }
+
 --- Main ---
 
 lastExceptionHandler :: SomeException -> IO ()
@@ -372,7 +370,9 @@ main :: HasCallStack => IO ()
 main = do
   let builder = V.mkVty V.defaultConfig
   initialVty <- builder
-  game <- initGame
+  let gen = mkStdGen 42
+  let (game, gen') = runStateGen gen initGame
+  let fullGame = FullGameState game gen'
   -- Idea borrowed from https://magnus.therning.org/2023-04-26-some-practical-haskell.html
   originalHandler <- getUncaughtExceptionHandler
   setUncaughtExceptionHandler $ handle originalHandler . lastExceptionHandler
@@ -382,4 +382,4 @@ main = do
     writeBChan chan Tick
     threadDelay delay
 
-  void $ customMain initialVty builder (Just chan) app game
+  void $ customMain initialVty builder (Just chan) app fullGame

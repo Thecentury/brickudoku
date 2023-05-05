@@ -52,7 +52,6 @@ import Board
 
 ----
 
--- todo where is it used?
 allPlaced :: [Maybe a] -> Bool
 allPlaced = all isNothing
 
@@ -286,14 +285,11 @@ randomFigures = do
 
 initGame :: HasCallStack => IO Game
 initGame = do
-  putStrLn "Before _board"
   let _board =
         array 
           (V2 0 0, V2 (boardSize - 1) (boardSize - 1))
           [(V2 x y, Free) | x <- [0 .. boardSize - 1], y <- [0 .. boardSize - 1]]
-  putStrLn "Before randomFigures"
   boardFigures <- randomFigures
-  putStrLn $ "Board figures: " <> show boardFigures
   let justFigures = Just <$> boardFigures
   let coreGame = VersionedState
         { _score = 0,
@@ -305,7 +301,6 @@ initGame = do
         { _history = newHistory coreGame,
           _autoPlay = False,
           _easyMode = False }
-  putStrLn $ "Game: " <> show game
   return game
 
 rowCells :: HasCallStack => Int -> Array Coord a -> [a]

@@ -370,13 +370,9 @@ lastExceptionHandler e = do
 
 main :: HasCallStack => IO ()
 main = do
-  putStrLn "Initializing game..."
-  game <- initGame
-  putStrLn "Creating Vty builder..."
   let builder = V.mkVty V.defaultConfig
-  putStrLn "Building initial Vty..."
   initialVty <- builder
-  putStrLn "Starting game..."
+  game <- initGame
   -- Idea borrowed from https://magnus.therning.org/2023-04-26-some-practical-haskell.html
   originalHandler <- getUncaughtExceptionHandler
   setUncaughtExceptionHandler $ handle originalHandler . lastExceptionHandler

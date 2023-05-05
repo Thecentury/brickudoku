@@ -76,11 +76,9 @@ rangesToBeFreed b = filter (\(_, range) -> allCellsAreFilled b range) full9Range
 removeFilledRanges :: HasCallStack => Board -> Board
 removeFilledRanges b = foldl (\b' (_, range) -> freeAllCells b' range) b $ rangesToBeFreed b
 
--- todo add tests
 possibleFigureStartCoordinates :: Figure -> [Coord]
 possibleFigureStartCoordinates fig =
   [V2 x y | y <- [0 .. boardSize - figureHeight - 1], x <- [0 .. boardSize - figureWidth - 1]] where
-    -- todo are width and height here correct?
     (_, V2 figureWidth figureHeight) = bounds fig
 
 pointsWhereFigureCanBePlaced :: HasCallStack => Figure -> Board -> [Coord]

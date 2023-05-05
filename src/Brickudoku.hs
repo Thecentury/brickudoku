@@ -296,19 +296,19 @@ data GameEvent = Tick
   deriving stock (Show, Eq, Ord)
 
 data VersionedState = VersionedState
-  { _score :: Int,
-    _board :: Board,
-    _figures :: Array Int (Maybe FigureInSelection),
-    _state :: GameState,
-    _turnNumber :: Int }
+  { _score :: !Int,
+    _board :: !Board,
+    _figures :: !(Array Int (Maybe FigureInSelection)),
+    _state :: !GameState,
+    _turnNumber :: !Int }
   deriving stock (Show, Eq)
 
 makeLenses ''VersionedState
 
 data Game = Game
-  { _history :: History VersionedState,
-    _autoPlay :: Bool,
-    _easyMode :: Bool }
+  { _history :: !(History VersionedState),
+    _autoPlay :: !Bool,
+    _easyMode :: !Bool }
   deriving stock (Show)
 
 makeLenses ''Game
@@ -317,7 +317,7 @@ currentGame :: Lens' Game VersionedState
 currentGame = history . current
 
 -- | Puts the new version of the game to the history
-putNewVersion :: HasCallStack => Game -> (VersionedState -> VersionedState) -> Game
+putNewVersion :: Game -> (VersionedState -> VersionedState) -> Game
 putNewVersion g f = history %~ updateCurrent' $ g where
   updateCurrent' :: History VersionedState -> History VersionedState
   updateCurrent' = put newCurrent
@@ -325,7 +325,7 @@ putNewVersion g f = history %~ updateCurrent' $ g where
   newCurrent = f $ g ^. currentGame
 
 -- | Updates the current version of the game without putting it to the history
-updateCurrentNotVersioned :: HasCallStack => Game -> (VersionedState -> VersionedState) -> Game
+updateCurrentNotVersioned :: Game -> (VersionedState -> VersionedState) -> Game
 updateCurrentNotVersioned g f = g & currentGame %~ f
 
 isGameOver :: Game -> Bool
@@ -338,11 +338,11 @@ isPlacingFigure game = case game ^. currentGame . state of
   PlacingFigure _ _ -> True
   _ -> False
 
-mergeCellHelpingHighlight :: HasCallStack => VisualCell -> VisualCell -> VisualCell
+mergeCellHelpingHighlight :: VisualCell -> VisualCell -> VisualCell
 mergeCellHelpingHighlight (VFree style) (VCanBePlacedHint _ result) = VCanBePlacedHint style result
 mergeCellHelpingHighlight existing _ = existing
 
-addHelpHighlightForFigure :: HasCallStack => HasCallStack => Board -> Figure -> Array Coord VisualCell -> Array Coord VisualCell
+addHelpHighlightForFigure :: HasCallStack => Board -> Figure -> Array Coord VisualCell -> Array Coord VisualCell
 addHelpHighlightForFigure b fig cells =
   cells // mergedCellsToUpdate where
     figureCoords = figureCellCoords fig
@@ -507,7 +507,7 @@ emptyFigure = mkFigure [[0]]
 
 rotateFigureClockwise :: HasCallStack => Figure -> Figure
 rotateFigureClockwise f =
-  array (V2 0 0, V2 (newWidth - 1) (newHeight - 1)) [(V2 y (figureHeight - 1 - y), f ! V2 x y) | y <- [0 .. figureHeight - 1], x <- [0 .. figureWidth - 1]]
+  array (V2 0 0, V2 (newWidth - 1) (newHeight - 1)) [(V2 x (figureHeight - 1 - y), f ! V2 x y) | y <- [0 .. figureHeight - 1], x <- [0 .. figureWidth - 1]]
     where
       figureWidth = width2d f
       figureHeight = height2d f
@@ -537,6 +537,7 @@ initGame = do
           [(V2 x y, Free) | x <- [0 .. boardSize - 1], y <- [0 .. boardSize - 1]]
   putStrLn "Before randomFigures"
   boardFigures <- randomFigures
+  putStrLn $ "Board figures: " <> show boardFigures
   let justFigures = Just <$> boardFigures
   let coreGame = VersionedState
         { _score = 0,
@@ -548,6 +549,7 @@ initGame = do
         { _history = newHistory coreGame,
           _autoPlay = False,
           _easyMode = False }
+  putStrLn $ "Game: " <> show game
   return game
 
 rowCells :: HasCallStack => Int -> Array Coord a -> [a]

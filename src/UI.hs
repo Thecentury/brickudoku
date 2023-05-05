@@ -184,7 +184,7 @@ drawUI game =
       else  
         hLimit 60 widget
 
-drawScore :: HasCallStack => Game -> Widget Name
+drawScore :: Game -> Widget Name
 drawScore game =
   padTop (Pad 1)
   $ hLimit 9
@@ -239,7 +239,7 @@ hintWidget = str "··"
 hintWillFreeWidget :: Widget n
 hintWillFreeWidget = str "◤◢"
 
-drawPlacingCell :: HasCallStack => VisualCell -> Widget Name
+drawPlacingCell :: VisualCell -> Widget Name
 drawPlacingCell (VFree PrimaryStyle) = withAttr emptyCellAttr cellWidget
 drawPlacingCell (VFree AltStyle)     = withAttr emptyAltStyleCellAttr cellWidget
 drawPlacingCell VFilled = withAttr filledCellAttr cellWidget
@@ -293,7 +293,7 @@ drawFigureToPlace (Just (FigureToPlace (FigureInSelection figure _) SelectedPlac
 drawFigureToPlace (Just (FigureToPlace (FigureInSelection figure _) CanBePlaced))     = drawSomeFigureToPlace notSelectedCanBePlacedFigureBorderMappings BS.unicodeRounded drawCell figure
 drawFigureToPlace (Just (FigureToPlace (FigureInSelection figure _) CannotBePlaced))  = drawSomeFigureToPlace notSelectedCanNotBePlacedFigureBorderMappings BS.unicodeRounded drawCell figure
 
-drawCell :: HasCallStack => Cell -> Widget Name
+drawCell :: Cell -> Widget Name
 drawCell Free = withAttr emptyCellAttr cellWidget
 drawCell Filled = withAttr filledCellAttr cellWidget
 
@@ -368,14 +368,14 @@ lastExceptionHandler :: SomeException -> IO ()
 lastExceptionHandler e = do
   putStrLn $ "Uncaught exception: " <> displayException e
 
-main :: IO ()
+main :: HasCallStack => IO ()
 main = do
-  putStrLn "Initializing..."
+  putStrLn "Initializing game..."
+  game <- initGame
+  putStrLn "Creating Vty builder..."
   let builder = V.mkVty V.defaultConfig
   putStrLn "Building initial Vty..."
   initialVty <- builder
-  putStrLn "Initializing game..."
-  game <- initGame
   putStrLn "Starting game..."
   -- Idea borrowed from https://magnus.therning.org/2023-04-26-some-practical-haskell.html
   originalHandler <- getUncaughtExceptionHandler

@@ -12,7 +12,7 @@ Built on top of the [brick](https://github.com/jtdaugherty/brick) library which 
 
 ## Installlation
 
-#### Install from source
+### Install from source
 
 First [get stack](https://docs.haskellstack.org/en/stable/#how-to-install). Then
 ```bash
@@ -31,6 +31,18 @@ Windows support is unfortunately questionable, but you can try building it in [W
 ## Usage
 
 Run the game by simply executing the `brickudoku` command.
+
+## Development
+
+To run the tests,
+```bash
+stack test
+```
+
+To see the test tree in TUI,
+```bash
+stack test --test-arguments "--tui"
+```
 
 ## To-do
 

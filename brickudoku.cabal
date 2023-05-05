@@ -91,6 +91,7 @@ test-suite brickudoku-test
     , linear
     , mtl
     , random
+    , sandwich
     , stm
     , transformers
     , vty

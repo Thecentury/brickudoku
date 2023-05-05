@@ -47,6 +47,12 @@ ghc-options:
 library:
   source-dirs: src
   exposed-modules: UI
+  other-modules:
+    - Board
+    - Primitives
+    - Undo
+    - Brickudoku
+    - MyPrelude
 
 executables:
   brickudoku:
@@ -62,7 +68,9 @@ executables:
 tests:
   brickudoku-test:
     main:                Spec.hs
-    source-dirs:         test
+    source-dirs:         
+      - test
+      - src
     ghc-options:
       - -threaded
       - -rtsopts

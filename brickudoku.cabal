@@ -27,10 +27,11 @@ library
   exposed-modules:
       UI
   other-modules:
+      Board
+      Primitives
+      Undo
       Brickudoku
       MyPrelude
-      Undo
-      Paths_brickudoku
   hs-source-dirs:
       src
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
@@ -76,9 +77,16 @@ test-suite brickudoku-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      Board
+      Brickudoku
+      MyPrelude
+      Primitives
+      UI
+      Undo
       Paths_brickudoku
   hs-source-dirs:
       test
+      src
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       array

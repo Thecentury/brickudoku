@@ -1,6 +1,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
+
 module Undo (
     History(..),
     newHistory,
@@ -15,13 +17,16 @@ module Undo (
 ) where
 
 import Control.Lens ( makeLenses, (^.), Lens' )
+import GHC.Generics ( Generic )
+
+--------------------------------------------------------------------------------
 
 -- | State stacks wrapping states in time
 data History s = History { 
     _current :: s, -- ^ last state putted
     _undos :: [s], -- ^ the history of putted states (reversed) without the redos
     _redos :: [s]  -- ^ history of the undo
-} deriving (Show, Eq)
+} deriving (Show, Eq, Generic)
 
 makeLenses ''History
 

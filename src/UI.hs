@@ -29,6 +29,7 @@ import Brickudoku
     FigureInSelection(..),
     currentGame,
     HintPlacementResult (..) )
+import Persistence (saveToFile, loadFromFileIfExists)
 
 import Control.Monad.State.Strict ( MonadState(put, get) )
 import Brick
@@ -55,7 +56,8 @@ import qualified Data.Map as Map
 import Brick.BChan (newBChan, writeBChan)
 import Control.Concurrent (threadDelay, forkIO)
 import Control.Monad (forever)
-import System.Random.Stateful (mkStdGen, runStateGen, StdGen)
+import System.Random.Stateful (runStateGen, StdGen, initStdGen)
+import Control.Monad.IO.Class (liftIO)
 
 type Name = ()
 
@@ -85,7 +87,10 @@ keyBindings =
   ]
 
 handleEvent :: HasCallStack => BrickEvent Name GameEvent -> EventM Name FullGameState ()
-handleEvent (VtyEvent (V.EvKey (V.KChar 'Q') [])) = halt
+handleEvent (VtyEvent (V.EvKey (V.KChar 'Q') [])) = do
+  (FullGameState game gen) <- get
+  liftIO $ saveToFile game gen  
+  halt
 handleEvent evt = do
   (FullGameState game gen) <- get
   let (actions, gen') = runStateGen gen (possibleActions game)
@@ -96,7 +101,7 @@ handleEvent evt = do
       in
         case actionsToApply of
           [] -> pure ()
-          [(_, newGame)] -> put $ FullGameState newGame gen'
+          [(_, game')] -> put $ FullGameState game' gen'
           _ -> error $ "Multiple applicable actions for key " ++ show evt ++ ": " ++ show (fmap fst actionsToApply)
     Nothing -> pure ()
 
@@ -366,13 +371,28 @@ lastExceptionHandler :: SomeException -> IO ()
 lastExceptionHandler e = do
   putStrLn $ "Uncaught exception: " <> displayException e
 
+loadOrInitGame :: HasCallStack => IO FullGameState
+loadOrInitGame = do
+  loadResult <- loadFromFileIfExists
+  case loadResult of
+    Nothing -> newGame
+    Just (Left err) -> do
+      putStrLn $ "Error loading game: " <> err
+      newGame
+    Just (Right (game, gen)) -> return $ FullGameState game gen
+  where
+    newGame :: IO FullGameState
+    newGame = do
+      gen <- initStdGen
+      let (game, gen') = runStateGen gen initGame
+      return $ FullGameState game gen'
+
+-- todo pass external RNG seed
 main :: HasCallStack => IO ()
 main = do
   let builder = V.mkVty V.defaultConfig
   initialVty <- builder
-  let gen = mkStdGen 42
-  let (game, gen') = runStateGen gen initGame
-  let fullGame = FullGameState game gen'
+  fullGame <- loadOrInitGame
   -- Idea borrowed from https://magnus.therning.org/2023-04-26-some-practical-haskell.html
   originalHandler <- getUncaughtExceptionHandler
   setUncaughtExceptionHandler $ handle originalHandler . lastExceptionHandler

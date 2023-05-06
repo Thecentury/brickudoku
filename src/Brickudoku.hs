@@ -3,10 +3,12 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Brickudoku
   ( Game,
     GameState(..),
+    VersionedState(..),
     Figure,
     FreeStyle(..),
     VisualCell(..),
@@ -43,13 +45,14 @@ import Data.Maybe (mapMaybe, isNothing, catMaybes, listToMaybe, fromMaybe)
 import Linear.V2 (V2(..))
 import qualified Data.Bifunctor
 import GHC.Stack (HasCallStack)
+import GHC.Generics ( Generic )
+import System.Random.Stateful (StatefulGen, UniformRange (uniformRM))
 import Data.List.Extra (groupOnKey)
 
 import MyPrelude ( mapiArray, (!), mapi, width2d, height2d )
 import Undo (History(..), newHistory, put, current, tryUndoUntilDifferentL, tryRedoUntilDifferentL)
 import Primitives
 import Board
-import System.Random.Stateful (StatefulGen, UniformRange (uniformRM))
 
 ----
 
@@ -134,7 +137,7 @@ type FigureIndex = Int
 
 -- todo rename, not always relates to a selection
 data FigureInSelection = FigureInSelection Figure FigureIndex
-  deriving stock (Show, Eq)
+  deriving stock (Show, Eq, Generic)
 
 data FigureToPlaceKind =
   -- | Not selected figure that can be placed to a board
@@ -158,11 +161,14 @@ data GameState =
   SelectingFigure FigureInSelection |
   PlacingFigure FigureInSelection Coord |
   GameOver
-  deriving stock (Show, Eq)
+  deriving stock (Show, Eq, Generic)
 
 -- | Ticks mark passing of time
 data GameEvent = Tick
   deriving stock (Show, Eq, Ord)
+
+-- instance forall ix a. Generic (Array ix a)
+-- instance Generic (Array Coord Cell)
 
 data VersionedState = VersionedState
   { _score :: !Int,
@@ -170,7 +176,7 @@ data VersionedState = VersionedState
     _figures :: !(Array Int (Maybe FigureInSelection)),
     _state :: !GameState,
     _turnNumber :: !Int }
-  deriving stock (Show, Eq)
+  deriving stock (Show, Eq, Generic)
 
 makeLenses ''VersionedState
 
@@ -178,7 +184,7 @@ data Game = Game
   { _history :: !(History VersionedState),
     _autoPlay :: !Bool,
     _easyMode :: !Bool }
-  deriving stock (Show)
+  deriving stock (Eq, Show, Generic)
 
 makeLenses ''Game
 

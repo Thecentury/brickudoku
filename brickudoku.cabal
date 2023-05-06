@@ -32,20 +32,26 @@ library
       Undo
       Brickudoku
       MyPrelude
+      Persistence
   hs-source-dirs:
       src
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
-      array
+      aeson
+    , array
     , base >=4.7 && <5
     , brick
+    , bytestring
     , containers
+    , directory
     , extra
+    , filepath
     , lens
     , linear
     , mtl
     , random
     , stm
+    , text
     , transformers
     , vty
   default-language: Haskell2010
@@ -58,17 +64,22 @@ executable brickudoku
       app
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      array
+      aeson
+    , array
     , base >=4.7 && <5
     , brick
     , brickudoku
+    , bytestring
     , containers
+    , directory
     , extra
+    , filepath
     , lens
     , linear
     , mtl
     , random
     , stm
+    , text
     , transformers
     , vty
   default-language: Haskell2010
@@ -80,6 +91,7 @@ test-suite brickudoku-test
       Board
       Brickudoku
       MyPrelude
+      Persistence
       Primitives
       UI
       Undo
@@ -89,17 +101,22 @@ test-suite brickudoku-test
       src
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      array
+      aeson
+    , array
     , base >=4.7 && <5
     , brick
+    , bytestring
     , containers
+    , directory
     , extra
+    , filepath
     , lens
     , linear
     , mtl
     , random
     , sandwich
     , stm
+    , text
     , transformers
     , vty
   default-language: Haskell2010

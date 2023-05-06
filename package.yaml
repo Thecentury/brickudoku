@@ -32,6 +32,11 @@ dependencies:
   - stm
   - array
   - linear
+  - aeson
+  - text
+  - bytestring
+  - directory
+  - filepath
 
 ghc-options:
   - -Wall
@@ -53,6 +58,7 @@ library:
     - Undo
     - Brickudoku
     - MyPrelude
+    - Persistence
 
 executables:
   brickudoku:

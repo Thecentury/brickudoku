@@ -33,6 +33,7 @@ library
       Brickudoku
       MyPrelude
       Persistence
+      VisualBoard
   hs-source-dirs:
       src
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
@@ -95,6 +96,7 @@ test-suite brickudoku-test
       Primitives
       UI
       Undo
+      VisualBoard
       Paths_brickudoku
   hs-source-dirs:
       test

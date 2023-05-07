@@ -5,17 +5,11 @@ module UI (main) where
 import Brickudoku
   ( Game,
     Figure,
-    FreeStyle(..),
-    VisualCell(..),
     Cell(..),
     Coord,
-    cellsToDisplay,
     UserAction(..),
     SystemAction(..),
     Action(..),
-    FigureToPlace(..),
-    FigureToPlaceKind(..),
-    figuresToPlace,
     score,
     turnNumber,
     emptyFigure,
@@ -27,8 +21,15 @@ import Brickudoku
     autoPlay,
     GameEvent (..),
     FigureInSelection(..),
-    currentGame,
-    HintPlacementResult (..) )
+    currentGame )
+import VisualBoard
+  ( VisualCell(..),
+    FreeStyle(..),
+    cellsToDisplay,
+    figuresToPlace,
+    FigureToPlace(..),
+    FigureToPlaceKind(..),
+    HintPlacementResult(..) )
 import Persistence (saveToFile, loadFromFileIfExists)
 
 import Control.Monad.State.Strict ( MonadState(put, get) )

@@ -24,6 +24,8 @@ import Brickudoku
     ( Cell(..), FigureInSelection, VersionedState, GameState, Game )
 import Undo (History)
 
+--------------------------------------------------------------------------------
+
 data ArrayWrapper i a = ArrayWrapper
   { _bounds :: (i, i),
     _elems :: [a] }

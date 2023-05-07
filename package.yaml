@@ -59,6 +59,7 @@ library:
     - Brickudoku
     - MyPrelude
     - Persistence
+    - VisualBoard
 
 executables:
   brickudoku:

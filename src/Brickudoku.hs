@@ -6,31 +6,28 @@
 {-# LANGUAGE DeriveGeneric #-}
 
 module Brickudoku
-  ( Game,
+  ( Game(..),
     GameState(..),
     VersionedState(..),
     Figure,
-    FreeStyle(..),
-    VisualCell(..),
     Cell(..),
     FigureInSelection(..),
-    FigureToPlace(..),
-    FigureToPlaceKind(..),
-    HintPlacementResult(..),
+    FigureIndex,
     Coord,
-    cellsToDisplay,
     isGameOver,
     isPlacingFigure,
     UserAction(..),
     SystemAction(..),
     Action(..),
     GameEvent(..),
-    figuresToPlace,
     -- Lenses
     score,
     turnNumber,
     autoPlay,
     currentGame,
+    easyMode,
+    state,
+    board,
     emptyFigure,
     initGame,
     figureRows,
@@ -38,21 +35,39 @@ module Brickudoku
     boardSize ) where
 
 import Control.Lens ( (&), makeLenses, (^.), (%~), (.~), (+~), Lens' )
-import Data.Array ( (//), array, bounds, Array, assocs, listArray, elems )
+import Data.Array ( array, Array, listArray, elems, (//) )
 import Control.Monad (replicateM, join)
-import Data.List (find, sort, sortOn)
+import Data.List (find, sort)
 import Data.Maybe (mapMaybe, isNothing, catMaybes, listToMaybe, fromMaybe)
 import Linear.V2 (V2(..))
-import qualified Data.Bifunctor
 import GHC.Stack (HasCallStack)
 import GHC.Generics ( Generic )
 import System.Random.Stateful (StatefulGen, UniformRange (uniformRM))
-import Data.List.Extra (groupOnKey)
 
 import MyPrelude ( mapiArray, (!), mapi, width2d, height2d )
 import Undo (History(..), newHistory, put, current, tryUndoUntilDifferentL, tryRedoUntilDifferentL)
 import Primitives
+    ( vectorDown,
+      vectorLeft,
+      vectorRight,
+      vectorUp,
+      zeroCoord,
+      Cell(..),
+      Coord,
+      RangeKind(..) )
 import Board
+    ( boardSize,
+      canBePlacedToBoardAtSomePoint,
+      emptyFigure,
+      figuresToPlaceCount,
+      pointsWhereFigureCanBePlaced,
+      randomRawFigure,
+      rangesToBeFreed,
+      removeFilledRanges,
+      tryMoveFigure,
+      tryPlaceFigure,
+      Board,
+      Figure )
 
 ----
 
@@ -67,95 +82,16 @@ scoreIncrement ranges = sum $ mapi (\i score -> (i + 1) * score) $ sort $ rangeP
 
 ----
 
-boardCellToPlacingCell :: Cell -> VisualCell
-boardCellToPlacingCell Free = VFree PrimaryStyle
-boardCellToPlacingCell Filled = VFilled
-
-boardToPlacingCells :: Board -> Array Coord VisualCell
-boardToPlacingCells board =
-  board
-  & assocs
-  & map (Data.Bifunctor.second boardCellToPlacingCell)
-  & array (bounds board)
-
-addAltStyleCells :: Array Coord VisualCell -> Array Coord VisualCell
-addAltStyleCells cells = cells // mapMaybe addAltStyleCell (assocs cells) where
-  addAltStyleCell :: (Coord, VisualCell) -> Maybe (Coord, VisualCell)
-  addAltStyleCell (coord, VFree PrimaryStyle) =
-    if isAltStyleCell coord then
-      Just (coord, VFree AltStyle)
-    else
-      Nothing
-  addAltStyleCell _ = Nothing
-
-  isAltStyleCell :: Coord -> Bool
-  isAltStyleCell (V2 x y) = isAltStyleCellThick (thickColumnNumber x) (thickColumnNumber y)
-
-  isAltStyleCellThick 0 1 = True 
-  isAltStyleCellThick 1 0 = True 
-  isAltStyleCellThick 1 2 = True 
-  isAltStyleCellThick 2 1 = True
-  isAltStyleCellThick _ _ = False 
-
-  thickColumnNumber :: Int -> Int
-  thickColumnNumber x = x `div` 3
-
-markFigureAsPlaced :: FigureInSelection -> Array FigureIndex (Maybe FigureInSelection) -> Array FigureIndex (Maybe FigureInSelection)
-markFigureAsPlaced (FigureInSelection _ ix) figures = figures // [(ix, Nothing)]
-
-addPlacingFigure :: HasCallStack => Figure -> Coord -> Board -> PlacingCellsFigure
-addPlacingFigure figure figureCoord board =
-  placingBoard // toBeFreedCells // figureCells
-  where
-    placingBoard = boardToPlacingCells board
-    boardWithFigure = fromMaybe board $ tryPlaceFigure figure figureCoord board
-    rangesWillBeFreed = snd =<< rangesToBeFreed boardWithFigure
-
-    figureCells =
-      figure
-      & assocs
-      & filter (\(_, cell) -> cell == Filled)
-      & map (\(coord, cell) -> (newCoord coord, figureCell (newCoord coord) cell))
-
-    toBeFreedCells = (, VWillBeFreed) <$> rangesWillBeFreed
-
-    newCoord :: Coord -> Coord
-    newCoord c = c + figureCoord
-
-    canPlaceFullFigure = all (\coord -> board ! coord == Free) $ newCoord <$> figureCellCoords figure
-
-    figureCell :: HasCallStack => Coord -> Cell -> VisualCell
-    figureCell boardCoord figCell =
-      case (board ! boardCoord, figCell, canPlaceFullFigure) of
-        (Filled, Filled, _)     -> VCannotPlace
-        (Filled, Free,   _)     -> VFilled
-        (Free,   Filled, True)  -> VCanPlaceFullFigure
-        (Free,   Filled, False) -> VCanPlaceButNotFullFigure
-        (Free,   Free,   _)     -> VFree PrimaryStyle
-
 type FigureIndex = Int
 
 -- todo rename, not always relates to a selection
 data FigureInSelection = FigureInSelection Figure FigureIndex
   deriving stock (Show, Eq, Generic)
 
-data FigureToPlaceKind =
-  -- | Not selected figure that can be placed to a board
-  CanBePlaced |
-  -- | Currently selected figure
-  Selected |
-  -- | Currently selected figure in a placing mode
-  SelectedPlacing |
-  -- | Figure that cannot be placed to a board
-  CannotBePlaced
-  deriving stock (Show, Eq)
-
-data FigureToPlace a = FigureToPlace
-  { _figureToPlace :: a,
-    _figureKind :: FigureToPlaceKind }
-    deriving stock (Show, Eq)
-
 makeLenses ''FigureInSelection
+
+markFigureAsPlaced :: FigureInSelection -> Array FigureIndex (Maybe FigureInSelection) -> Array FigureIndex (Maybe FigureInSelection)
+markFigureAsPlaced (FigureInSelection _ ix) figures = figures // [(ix, Nothing)]
 
 data GameState =
   SelectingFigure FigureInSelection |
@@ -166,9 +102,6 @@ data GameState =
 -- | Ticks mark passing of time
 data GameEvent = Tick
   deriving stock (Show, Eq, Ord)
-
--- instance forall ix a. Generic (Array ix a)
--- instance Generic (Array Coord Cell)
 
 data VersionedState = VersionedState
   { _score :: !Int,
@@ -212,76 +145,6 @@ isPlacingFigure :: Game -> Bool
 isPlacingFigure game = case game ^. currentGame . state of
   PlacingFigure _ _ -> True
   _ -> False
-
-mergeCellHelpingHighlight :: VisualCell -> VisualCell -> VisualCell
-mergeCellHelpingHighlight (VFree style) (VCanBePlacedHint _ result) = VCanBePlacedHint style result
-mergeCellHelpingHighlight existing _ = existing
-
-addHelpHighlightForFigure :: HasCallStack => Board -> Figure -> Array Coord VisualCell -> Array Coord VisualCell
-addHelpHighlightForFigure b fig cells =
-  cells // mergedCellsToUpdate where
-    figureCoords = figureCellCoords fig
-    canBePlaced = (\startPos -> (startPos, (+ startPos) <$> figureCoords)) <$> pointsWhereFigureCanBePlaced fig b
-    currentCells = 
-      concatMap (\(startCoord, coords) -> 
-        (\coord -> (startCoord, coord, cells ! coord)) <$> coords) 
-        canBePlaced
-    -- Here single coordinate can occur multiple times, need to merge the cells
-    cellsToUpdate =
-      (\(startCoord, coord, boardCell) -> (coord, mergeCellHelpingHighlight boardCell $ VCanBePlacedHint PrimaryStyle (placementResult startCoord))) 
-      <$> currentCells
-    mergedCellsToUpdate =
-      -- Drop the grouping key (coord)
-      map snd
-      -- Here we use that 'JustFigure' < 'Region'. For each list of cells with the same coord use max of them.
-      $ Data.Bifunctor.second maximum
-      -- Convert to [(Coord, [(Coord, VisualCell)])]
-      <$> groupOnKey fst (sortOn fst cellsToUpdate)
-    placementResult :: HasCallStack => Coord -> HintPlacementResult
-    placementResult coord =
-      case tryPlaceFigure fig coord b of
-        Just newBoard ->
-          if null $ rangesToBeFreed newBoard then
-            JustFigure
-          else
-            Region
-        Nothing -> JustFigure
-
-addHelpHighlight :: HasCallStack => Game -> Array Coord VisualCell -> Array Coord VisualCell
-addHelpHighlight g cells | not (g ^. easyMode) = cells
-addHelpHighlight (Game (History (VersionedState _ _ _ GameOver _) _ _) _ _) cells = cells
-addHelpHighlight (Game (History (VersionedState _ b _ (SelectingFigure (FigureInSelection fig _)) _) _ _) _ _) cells =
-  addHelpHighlightForFigure b fig cells
-addHelpHighlight (Game (History (VersionedState _ b _ (PlacingFigure (FigureInSelection fig _) _) _) _ _) _ _) cells =
-  addHelpHighlightForFigure b fig cells
-
-cellsToDisplay :: HasCallStack => Game -> PlacingCellsFigure
-cellsToDisplay game = case game ^. currentGame . state of
-  PlacingFigure (FigureInSelection figure _) coord -> 
-    wrap $ addPlacingFigure figure coord brd
-  _ ->
-    wrap $ boardToPlacingCells brd
-  where
-    wrap cells = addHelpHighlight game $ addAltStyleCells cells
-    brd = game ^. currentGame . board
-      
-figuresToPlace :: HasCallStack => Game -> [Maybe (FigureToPlace FigureInSelection)]
-figuresToPlace game =
-  game ^. currentGame 
-  & _figures
-  & elems
-  & map (fmap (\fig -> FigureToPlace fig $ kind fig)) where
-    kind :: FigureInSelection -> FigureToPlaceKind
-    kind fig =
-      case game ^. currentGame . state of
-        GameOver -> CannotBePlaced
-        SelectingFigure selectedFigure -> canBePlaced selectedFigure fig Selected
-        PlacingFigure selectedFigure _ -> canBePlaced selectedFigure fig SelectedPlacing
-    canBePlaced :: FigureInSelection -> FigureInSelection -> FigureToPlaceKind -> FigureToPlaceKind
-    canBePlaced selectedFigure fig@(FigureInSelection figureItself _) selectedMode
-      | fig == selectedFigure = selectedMode
-      | canBePlacedToBoardAtSomePoint figureItself (game ^. currentGame . board) = CanBePlaced
-      | otherwise = CannotBePlaced      
 
 ---
 

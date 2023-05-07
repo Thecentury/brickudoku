@@ -12,7 +12,7 @@ import Linear.V2 (V2(..), _x, _y)
 import MyPrelude ( (!), width2d, height2d )
 import GHC.Stack (HasCallStack)
 
-import Primitives
+import Primitives ( Cell(..), Coord, RangeKind(..) )
 
 --------------------------------------------------------------------------------
 
@@ -22,8 +22,6 @@ figureCellCoords :: Figure -> [Coord]
 figureCellCoords = fmap fst . filter (\(_, e) -> e == Filled) . assocs
 
 type Board = Figure
-
-type PlacingCellsFigure = Array Coord VisualCell
 
 tryMoveFigure :: Board -> Figure -> Coord -> Coord -> Maybe Coord
 tryMoveFigure board figure coord vector =

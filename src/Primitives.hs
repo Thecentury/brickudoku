@@ -30,22 +30,6 @@ data Cell =
   Free | Filled
   deriving stock (Show, Eq)
 
-data FreeStyle = PrimaryStyle | AltStyle
-  deriving stock (Show, Eq, Ord)
-
-data HintPlacementResult = JustFigure | Region
-  deriving stock (Show, Eq, Ord)
-
-data VisualCell =
-  VFree FreeStyle |
-  VFilled |
-  VWillBeFreed |
-  VCanPlaceFullFigure |
-  VCanPlaceButNotFullFigure |
-  VCannotPlace |
-  VCanBePlacedHint FreeStyle HintPlacementResult
-  deriving stock (Show, Eq, Ord)
-
 --------------------------------------------------------------------------------
 
 data RangeKind =

@@ -18,6 +18,7 @@ module Brickudoku
     isPlacingFigure,
     UserAction(..),
     SystemAction(..),
+    Clickable(..),
     Action(..),
     GameEvent(..),
     -- Lenses
@@ -206,6 +207,11 @@ tryFindNextFigureToSelect b figs nextIndices =
 
 ---- Commands
 
+data Clickable =
+  PlaceFigureClickable Coord |
+  SelectFigureClickable FigureIndex
+  deriving stock (Eq, Show, Ord)
+
 data UserAction =
   SelectNextFigure |
   SelectPreviousFigure |
@@ -229,7 +235,8 @@ data SystemAction =
 
 data Action =
   UserAction UserAction |
-  SystemAction SystemAction
+  SystemAction SystemAction |
+  Click Clickable
   deriving stock (Eq, Show)
 
 onlyUserAction :: Action -> Maybe UserAction

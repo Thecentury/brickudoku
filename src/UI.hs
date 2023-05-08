@@ -1,5 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+
 module UI (main) where
 
 import Brickudoku
@@ -9,6 +12,7 @@ import Brickudoku
     Coord,
     UserAction(..),
     SystemAction(..),
+    Clickable(..),
     Action(..),
     score,
     turnNumber,
@@ -40,7 +44,7 @@ import Brick
   , hLimit, vBox, hBox, padLeft, padTop, padAll, Padding(..)
   , withBorderStyle, str
   , attrMap, withAttr, emptyWidget, AttrName, on, fg, bg
-  , (<+>), (<=>), attrName, joinBorders, padLeftRight, vLimit, updateAttrMap )
+  , (<+>), (<=>), attrName, joinBorders, padLeftRight, vLimit, updateAttrMap, clickable )
 import qualified Brick.AttrMap as A
 import qualified Brick.Widgets.Border as B
 import qualified Brick.Widgets.Border.Style as BS
@@ -60,7 +64,8 @@ import Control.Monad (forever)
 import System.Random.Stateful (runStateGen, StdGen, initStdGen)
 import Control.Monad.IO.Class (liftIO)
 
-type Name = ()
+newtype Name = Name Clickable
+  deriving newtype (Show, Eq, Ord)
 
 app :: App FullGameState GameEvent Name
 app = App { appDraw = drawUI
@@ -141,8 +146,12 @@ drawUI (FullGameState game _) =
       $ withBorderStyle BS.unicodeRounded
       $ B.border
       $ hBox
-      $ map (vLimit 6 . C.vCenter . drawFigureToPlace) 
+      $ map (withClickableId $ vLimit 6 . C.vCenter . drawFigureToPlace) 
       $ figuresToPlace game
+
+    withClickableId :: (Maybe a -> Widget Name) -> Maybe (a, Clickable) -> Widget Name
+    withClickableId render Nothing = render Nothing
+    withClickableId render (Just (a, name)) = clickable (Name name) $ render $ Just a
     
     applyGameOverPalette widget =
       if isGameOver game then

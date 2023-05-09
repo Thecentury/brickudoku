@@ -44,11 +44,12 @@ import Brick
   , hLimit, vBox, hBox, padLeft, padTop, padAll, Padding(..)
   , withBorderStyle, str
   , attrMap, withAttr, emptyWidget, AttrName, on, fg, bg
-  , (<+>), (<=>), attrName, joinBorders, padLeftRight, vLimit, updateAttrMap, clickable )
+  , (<+>), (<=>), attrName, joinBorders, padLeftRight, vLimit, updateAttrMap, clickable, getVtyHandle )
 import qualified Brick.AttrMap as A
 import qualified Brick.Widgets.Border as B
 import qualified Brick.Widgets.Border.Style as BS
 import qualified Brick.Widgets.Center as C
+import qualified Brick.Types as T
 import Control.Lens ((^.))
 import qualified Graphics.Vty as V
 import Data.Array (Array)
@@ -71,7 +72,9 @@ app :: App FullGameState GameEvent Name
 app = App { appDraw = drawUI
           , appChooseCursor = neverShowCursor
           , appHandleEvent = handleEvent
-          , appStartEvent = return ()
+          , appStartEvent = do
+              vty <- getVtyHandle
+              liftIO $ V.setMode (V.outputIface vty) V.Mouse True
           , appAttrMap = const theMap
           }
 
@@ -97,6 +100,16 @@ handleEvent (VtyEvent (V.EvKey (V.KChar 'Q') [])) = do
   (FullGameState game gen) <- get
   liftIO $ saveToFile game gen  
   halt
+
+handleEvent (T.MouseDown (Name name) _ _ _) = do
+  (FullGameState game gen) <- get
+  let (actions, gen') = runStateGen gen (possibleActions game)
+  let actionsToApply = filter (\(a, _) -> a == Click name) actions
+  case actionsToApply of
+    [] -> pure ()
+    [(_, game')] -> put $ FullGameState game' gen'
+    _ -> error $ "Multiple applicable actions for click " ++ show name ++ ": " ++ show (fmap fst actionsToApply)
+
 handleEvent evt = do
   (FullGameState game gen) <- get
   let (actions, gen') = runStateGen gen (possibleActions game)

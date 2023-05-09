@@ -4,6 +4,8 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use head" #-}
 
 module Brickudoku
   ( Game(..),
@@ -21,6 +23,7 @@ module Brickudoku
     Clickable(..),
     Action(..),
     GameEvent(..),
+    clickableForCell,
     -- Lenses
     score,
     turnNumber,
@@ -157,7 +160,7 @@ randomFigures gen = do
 initGame :: (HasCallStack, StatefulGen g m) => g -> m Game
 initGame gen = do
   let _board =
-        array 
+        array
           (V2 0 0, V2 (boardSize - 1) (boardSize - 1))
           [(V2 x y, Free) | x <- [0 .. boardSize - 1], y <- [0 .. boardSize - 1]]
   boardFigures <- randomFigures gen
@@ -168,7 +171,7 @@ initGame gen = do
           _figures = justFigures,
           _state = SelectingFigure $ boardFigures ! 0,
           _turnNumber = 1 }
-  let game = Game 
+  let game = Game
         { _history = newHistory coreGame,
           _autoPlay = False,
           _easyMode = False }
@@ -280,6 +283,14 @@ randomElement gen list = do
   randomIndex <- uniformRM (0, length list - 1) gen
   pure $ list !! randomIndex
 
+clickableFigure :: Game -> FigureIndex -> Maybe (Action, Game)
+clickableFigure game figureIx = do
+  fig <- (game ^. currentGame . figures) ! figureIx
+  let (FigureInSelection figureItself _) = fig
+  let coord = fromMaybe zeroCoord $ listToMaybe $ pointsWhereFigureCanBePlaced figureItself (game ^. currentGame . board)
+  let game' = updateCurrentNotVersioned game $ state .~ PlacingFigure fig coord
+  pure (Click $ SelectFigureClickable figureIx, game')
+
 -- todo create own monad/type like Tetris does?
 -- todo merge with 'possibleActions'?
 possibleActionsImpl :: StatefulGen g m => g -> Game -> Bool -> m [(Action, Game)]
@@ -293,6 +304,8 @@ possibleActionsImpl gen game generateAutoPlay = do
           [
             moveFigure (UserAction SelectNextFigure) nextFigureIndices,
             moveFigure (UserAction SelectPreviousFigure) previousFigureIndices,
+            clickableFigure game $ nextFigureIndices figureIndex !! 0,
+            clickableFigure game $ nextFigureIndices figureIndex !! 1,
             startPlacing,
             newGame,
             toggleAutoPlayAction game,
@@ -363,6 +376,8 @@ possibleActionsImpl gen game generateAutoPlay = do
             tryMove vectorLeft $ UserAction MoveFigureLeft,
             tryMove vectorDown $ UserAction MoveFigureDown,
             tryMove vectorUp $ UserAction MoveFigureUp,
+            clickableFigure game $ nextFigureIndices figureIndex !! 0,
+            clickableFigure game $ nextFigureIndices figureIndex !! 1,
             placeAction,
             newGame,
             toggleAutoPlayAction game,
@@ -396,7 +411,12 @@ redoAction game =
 toggleEasyModeAction :: Game -> Maybe (Action, Game)
 toggleEasyModeAction game =
   Just (SystemAction ToggleEasyMode, game') where
-    game' = game & easyMode %~ not 
+    game' = game & easyMode %~ not
 
 possibleActions :: StatefulGen g m => Game -> g -> m [(Action, Game)]
 possibleActions game gen = possibleActionsImpl gen game True
+
+-------------------------------------------------------------------------------
+
+clickableForCell :: Coord -> Clickable
+clickableForCell = PlaceFigureClickable

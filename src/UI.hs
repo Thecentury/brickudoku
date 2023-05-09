@@ -74,6 +74,7 @@ app = App { appDraw = drawUI
           , appHandleEvent = handleEvent
           , appStartEvent = do
               vty <- getVtyHandle
+              -- todo check if it is possible to be notified about mouse move events
               liftIO $ V.setMode (V.outputIface vty) V.Mouse True
           , appAttrMap = const theMap
           }
@@ -249,7 +250,7 @@ drawGrid game =
   $ joinBorders
   $ B.border
   $ padAll 0
-  $ drawFigure drawPlacingCell
+  $ drawFigure drawPlacingCell True
   $ cellsToDisplay game
 
 cellWidget :: Widget n
@@ -274,9 +275,12 @@ drawPlacingCell (VCanBePlacedHint AltStyle     JustFigure) = withAttr canBePlace
 drawPlacingCell (VCanBePlacedHint PrimaryStyle Region)     = withAttr canBePlacedWillFreeHintAttr hintWillFreeWidget
 drawPlacingCell (VCanBePlacedHint AltStyle     Region)     = withAttr canBePlacedWillFreeHintAltStyleAttr hintWillFreeWidget
 
-drawFigure :: HasCallStack => (a -> Widget Name) -> Array Coord a -> Widget Name
-drawFigure drawOneCell figure = vBox cellRows where
-  cellRows = hBox . map drawOneCell <$> figureRows figure
+-- todo use a special type instead of Bool
+drawFigure :: HasCallStack => (a -> Widget Name) -> Bool -> Array Coord a -> Widget Name
+drawFigure drawOneCell True figure = vBox cellRows where
+  cellRows = hBox . map (\(cell, clickableId) -> clickable (Name clickableId) $ drawOneCell cell) <$> figureRows figure
+drawFigure drawOneCell False figure = vBox cellRows where
+  cellRows = hBox . map (drawOneCell . fst) <$> figureRows figure
 
 selectedFigureBorderMappings :: [(A.AttrName, V.Attr)]
 selectedFigureBorderMappings =
@@ -306,7 +310,7 @@ drawSomeFigureToPlace mapping borderStyle drawOneCell figure =
   $ hLimit 10
   $ vLimit 6
   $ C.center
-  $ drawFigure drawOneCell figure
+  $ drawFigure drawOneCell False figure
 
 drawFigureToPlace :: HasCallStack => Maybe (FigureToPlace FigureInSelection) -> Widget Name
 drawFigureToPlace Nothing                                                             = drawSomeFigureToPlace notSelectedCanBePlacedFigureBorderMappings BS.unicodeRounded (\_ -> withAttr emptyCellAttr $ str "  ") emptyFigure

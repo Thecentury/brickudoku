@@ -4,6 +4,8 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use head" #-}
 
 module Brickudoku
   ( Game(..),
@@ -18,8 +20,11 @@ module Brickudoku
     isPlacingFigure,
     UserAction(..),
     SystemAction(..),
+    Clickable(..),
     Action(..),
     GameEvent(..),
+    clickableForCell,
+    hoverOver,
     -- Lenses
     score,
     turnNumber,
@@ -36,7 +41,7 @@ module Brickudoku
 
 import Control.Lens ( (&), makeLenses, (^.), (%~), (.~), (+~), Lens' )
 import Data.Array ( array, Array, listArray, elems, (//) )
-import Control.Monad (replicateM, join)
+import Control.Monad (replicateM, join, forM)
 import Data.List (find, sort)
 import Data.Maybe (mapMaybe, isNothing, catMaybes, listToMaybe, fromMaybe)
 import Linear.V2 (V2(..))
@@ -67,7 +72,7 @@ import Board
       tryMoveFigure,
       tryPlaceFigure,
       Board,
-      Figure )
+      Figure, validateFigureStartCoord )
 
 ----
 
@@ -156,7 +161,7 @@ randomFigures gen = do
 initGame :: (HasCallStack, StatefulGen g m) => g -> m Game
 initGame gen = do
   let _board =
-        array 
+        array
           (V2 0 0, V2 (boardSize - 1) (boardSize - 1))
           [(V2 x y, Free) | x <- [0 .. boardSize - 1], y <- [0 .. boardSize - 1]]
   boardFigures <- randomFigures gen
@@ -167,19 +172,19 @@ initGame gen = do
           _figures = justFigures,
           _state = SelectingFigure $ boardFigures ! 0,
           _turnNumber = 1 }
-  let game = Game 
+  let game = Game
         { _history = newHistory coreGame,
           _autoPlay = False,
           _easyMode = False }
   return game
 
-rowCells :: HasCallStack => Int -> Array Coord a -> [a]
+rowCells :: HasCallStack => Int -> Array Coord a -> [(a, Clickable)]
 rowCells rowIndex f =
-  [f ! V2 x rowIndex | x <- [0 .. figureWidth - 1]]
+  [(f ! V2 x rowIndex, clickableForCell $ V2 x rowIndex) | x <- [0 .. figureWidth - 1]]
     where
       figureWidth = width2d f
 
-figureRows :: HasCallStack => Array Coord a -> [[a]]
+figureRows :: HasCallStack => Array Coord a -> [[(a, Clickable)]]
 figureRows f = (`rowCells` f) <$> rowIndices where
   figureHeight = height2d f
   rowIndices = [0 .. figureHeight - 1]
@@ -194,7 +199,7 @@ previousFigureIndices :: FigureIndex -> [FigureIndex]
 previousFigureIndices currentFigureIndex =
   (`rem` figuresToPlaceCount) <$> [figuresToPlaceCount + currentFigureIndex - 1, figuresToPlaceCount + currentFigureIndex - 2]
 
-tryFindNextFigureToSelect :: HasCallStack => Figure -> Array FigureIndex (Maybe FigureInSelection) -> [FigureIndex] -> Maybe FigureInSelection
+tryFindNextFigureToSelect :: HasCallStack => Board -> Array FigureIndex (Maybe FigureInSelection) -> [FigureIndex] -> Maybe FigureInSelection
 tryFindNextFigureToSelect b figs nextIndices =
   join $ find canBeSelected nexts where
     canBeSelected :: Maybe FigureInSelection -> Bool
@@ -206,6 +211,11 @@ tryFindNextFigureToSelect b figs nextIndices =
 
 ---- Commands
 
+data Clickable =
+  PlaceFigureClickable Coord |
+  SelectFigureClickable FigureIndex
+  deriving stock (Eq, Show, Ord)
+
 data UserAction =
   SelectNextFigure |
   SelectPreviousFigure |
@@ -215,7 +225,8 @@ data UserAction =
   MoveFigureUp |
   StartPlacingFigure |
   CancelPlacingFigure |
-  PlaceFigure
+  PlaceFigure |
+  MoveFigureTo Coord
   deriving stock (Eq, Show)
 
 data SystemAction =
@@ -229,7 +240,8 @@ data SystemAction =
 
 data Action =
   UserAction UserAction |
-  SystemAction SystemAction
+  SystemAction SystemAction |
+  Click Clickable
   deriving stock (Eq, Show)
 
 onlyUserAction :: Action -> Maybe UserAction
@@ -268,10 +280,67 @@ nextAutoPlayTurnAction gen game generateAutoPlay = do
 actionsAccordingToProbability :: [(UserAction, a)] -> [(UserAction, a)]
 actionsAccordingToProbability = concatMap (\(action, game) -> replicate (userActionProbability action) (action, game))
 
+-- todo move to MyPrelude
 randomElement :: StatefulGen g m => g -> [a] -> m a
 randomElement gen list = do
   randomIndex <- uniformRM (0, length list - 1) gen
   pure $ list !! randomIndex
+
+clickableFigureAction :: Game -> FigureIndex -> Maybe (Action, Game)
+clickableFigureAction game figureIx = do
+  fig <- tryFindNextFigureToSelect (game ^. currentGame . board) (game ^. currentGame . figures) [figureIx]
+  let (FigureInSelection figureItself _) = fig
+  let coord = fromMaybe zeroCoord $ listToMaybe $ pointsWhereFigureCanBePlaced figureItself (game ^. currentGame . board)
+  let game' = updateCurrentNotVersioned game $ state .~ PlacingFigure fig coord
+  pure (Click $ SelectFigureClickable figureIx, game')
+
+placeFigureAction :: StatefulGen g m => g -> Game -> FigureInSelection -> Action -> Coord -> m (Maybe (Action, Game))
+placeFigureAction gen' game figure@(FigureInSelection selectedFigure figureIndex) action coord = do
+  case tryPlaceFigure selectedFigure coord (game ^. currentGame . board) of
+    Nothing -> pure Nothing
+    Just newBoard -> do
+      let figuresWithSelectedPlaced = markFigureAsPlaced figure $ game ^. currentGame . figures
+      (newFigures, turnIncrement, nextIndices) <-
+        if allPlaced $ elems figuresWithSelectedPlaced then
+          fmap (, 1, [0 .. figuresToPlaceCount - 1]) $ fmap Just <$> randomFigures gen'
+        else
+          pure (figuresWithSelectedPlaced, 0, nextFigureIndices figureIndex)
+      let scoreIncr = scoreIncrement $ fst <$> rangesToBeFreed newBoard
+      let state' =
+            figures .~ newFigures
+            $ board .~ removeFilledRanges newBoard
+            $ turnNumber +~ turnIncrement
+            $ score +~ scoreIncr
+            $ game ^. currentGame
+      let maybeNextFig = tryFindNextFigureToSelect (state' ^. board) newFigures nextIndices
+      pure $ case maybeNextFig of
+        Just nextFig ->
+          let
+            state'' = state .~ SelectingFigure nextFig $ state'
+            game' = putNewVersion game $ const state''
+          in
+          Just (action, game')
+        Nothing ->
+          let game' = putNewVersion game $ const $ state .~ GameOver $ state' in
+          Just (action, game')
+
+clickToPlaceFigureActions :: StatefulGen g m => g -> Game -> FigureInSelection -> m [(Action, Game)]
+clickToPlaceFigureActions gen game figure@(FigureInSelection selectedFigure _) = do
+  let startCoordinates = pointsWhereFigureCanBePlaced selectedFigure (game ^. currentGame . board)
+  fmap catMaybes <$> forM startCoordinates $ \coord -> placeFigureAction gen game figure (Click $ PlaceFigureClickable coord) coord
+
+hoverOver :: Clickable -> Game -> Game
+hoverOver clickable g =
+  case hover (g ^. currentGame . state) clickable (g ^. currentGame . board) of 
+    Just state' -> updateCurrentNotVersioned g $ state .~ state'
+    Nothing -> g
+  where
+    hover :: GameState -> Clickable -> Board -> Maybe GameState
+    hover (PlacingFigure figure@(FigureInSelection fig _) _) (PlaceFigureClickable coord) b =
+      PlacingFigure figure <$> validateFigureStartCoord b fig coord
+    hover (SelectingFigure figure@(FigureInSelection fig _)) (PlaceFigureClickable coord) b =
+      PlacingFigure figure <$> validateFigureStartCoord b fig coord
+    hover _ _ _ = Nothing
 
 -- todo create own monad/type like Tetris does?
 -- todo merge with 'possibleActions'?
@@ -282,10 +351,13 @@ possibleActionsImpl gen game generateAutoPlay = do
       actions = do
         newGame <- restartGameAction gen
         autoPlayTurn <- nextAutoPlayTurnAction gen game generateAutoPlay
-        pure $ catMaybes
+        clickToPlaceActions <- clickToPlaceFigureActions gen game figure
+        pure $ clickToPlaceActions ++ catMaybes
           [
             moveFigure (UserAction SelectNextFigure) nextFigureIndices,
             moveFigure (UserAction SelectPreviousFigure) previousFigureIndices,
+            clickableFigureAction game $ nextFigureIndices figureIndex !! 0,
+            clickableFigureAction game $ nextFigureIndices figureIndex !! 1,
             startPlacing,
             newGame,
             toggleAutoPlayAction game,
@@ -316,46 +388,19 @@ possibleActionsImpl gen game generateAutoPlay = do
         let game' = updateCurrentNotVersioned game $ state .~ PlacingFigure figure newCoord
         pure (action, game')
 
-      placeFigureAction :: StatefulGen g m => g -> m (Maybe (Action, Game))
-      placeFigureAction gen' = do
-        case tryPlaceFigure selectedFigure coord board_ of
-          Nothing -> pure Nothing
-          Just newBoard -> do
-            let figuresWithSelectedPlaced = markFigureAsPlaced figure $ game ^. currentGame . figures
-            (newFigures, turnIncrement, nextIndices) <-
-              if allPlaced $ elems figuresWithSelectedPlaced then
-                fmap (, 1, [0 .. figuresToPlaceCount - 1]) $ fmap Just <$> randomFigures gen'
-              else
-                pure (figuresWithSelectedPlaced, 0, nextFigureIndices figureIndex)
-            let scoreIncr = scoreIncrement $ fst <$> rangesToBeFreed newBoard
-            let state' =
-                  figures .~ newFigures
-                  $ board .~ removeFilledRanges newBoard
-                  $ turnNumber +~ turnIncrement
-                  $ score +~ scoreIncr
-                  $ game ^. currentGame
-            let maybeNextFig = tryFindNextFigureToSelect (state' ^. board) newFigures nextIndices
-            pure $ case maybeNextFig of
-              Just nextFig ->
-                let
-                  state'' = state .~ SelectingFigure nextFig $ state'
-                  game' = putNewVersion game $ const state''
-                in
-                Just (UserAction PlaceFigure, game')
-              Nothing ->
-                let game' = putNewVersion game $ const $ state .~ GameOver $ state' in
-                Just (UserAction PlaceFigure, game')
-
       actions :: StatefulGen g m => g -> m [(Action, Game)]
       actions gen' = do
-        placeAction <- placeFigureAction gen'
+        placeAction <- placeFigureAction gen' game figure (UserAction PlaceFigure) coord
         newGame <- restartGameAction gen'
         autoPlayTurn <- nextAutoPlayTurnAction gen' game generateAutoPlay
-        pure $ catMaybes [
+        clickToPlaceActions <- clickToPlaceFigureActions gen' game figure
+        pure $ clickToPlaceActions ++ catMaybes [
             tryMove vectorRight $ UserAction MoveFigureRight,
             tryMove vectorLeft $ UserAction MoveFigureLeft,
             tryMove vectorDown $ UserAction MoveFigureDown,
             tryMove vectorUp $ UserAction MoveFigureUp,
+            clickableFigureAction game $ nextFigureIndices figureIndex !! 0,
+            clickableFigureAction game $ nextFigureIndices figureIndex !! 1,
             placeAction,
             newGame,
             toggleAutoPlayAction game,
@@ -389,7 +434,12 @@ redoAction game =
 toggleEasyModeAction :: Game -> Maybe (Action, Game)
 toggleEasyModeAction game =
   Just (SystemAction ToggleEasyMode, game') where
-    game' = game & easyMode %~ not 
+    game' = game & easyMode %~ not
 
 possibleActions :: StatefulGen g m => Game -> g -> m [(Action, Game)]
 possibleActions game gen = possibleActionsImpl gen game True
+
+-------------------------------------------------------------------------------
+
+clickableForCell :: Coord -> Clickable
+clickableForCell = PlaceFigureClickable

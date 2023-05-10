@@ -13,7 +13,7 @@ module VisualBoard
     )
   where
 
-import Data.Array ( (//), array, bounds, Array, assocs, elems )
+import Data.Array ( (//), array, bounds, Array, assocs )
 import qualified Data.Bifunctor
 import Linear.V2 (V2(..))
 
@@ -29,13 +29,13 @@ import Board
 import Brickudoku
  (
     FigureInSelection(..),
-    Game(..), 
-    GameState (..), 
+    Game(..),
+    GameState (..),
     VersionedState (..),
-    easyMode, 
-    currentGame, 
-    state, 
-    board )
+    easyMode,
+    currentGame,
+    state,
+    board, Clickable (..) )
 import GHC.Stack (HasCallStack)
 import Data.Function ((&))
 import Data.Maybe (mapMaybe, fromMaybe)
@@ -87,11 +87,11 @@ addAltStyleCells cells = cells // mapMaybe addAltStyleCell (assocs cells) where
   isAltStyleCell :: Coord -> Bool
   isAltStyleCell (V2 x y) = isAltStyleCellThick (thickColumnNumber x) (thickColumnNumber y)
 
-  isAltStyleCellThick 0 1 = True 
-  isAltStyleCellThick 1 0 = True 
-  isAltStyleCellThick 1 2 = True 
+  isAltStyleCellThick 0 1 = True
+  isAltStyleCellThick 1 0 = True
+  isAltStyleCellThick 1 2 = True
   isAltStyleCellThick 2 1 = True
-  isAltStyleCellThick _ _ = False 
+  isAltStyleCellThick _ _ = False
 
   thickColumnNumber :: Int -> Int
   thickColumnNumber x = x `div` 3
@@ -137,13 +137,13 @@ addHelpHighlightForFigure b fig cells =
   cells // mergedCellsToUpdate where
     figureCoords = figureCellCoords fig
     canBePlaced = (\startPos -> (startPos, (+ startPos) <$> figureCoords)) <$> pointsWhereFigureCanBePlaced fig b
-    currentCells = 
-      concatMap (\(startCoord, coords) -> 
-        (\coord -> (startCoord, coord, cells ! coord)) <$> coords) 
+    currentCells =
+      concatMap (\(startCoord, coords) ->
+        (\coord -> (startCoord, coord, cells ! coord)) <$> coords)
         canBePlaced
     -- Here single coordinate can occur multiple times, need to merge the cells
     cellsToUpdate =
-      (\(startCoord, coord, boardCell) -> (coord, mergeCellHelpingHighlight boardCell $ VCanBePlacedHint PrimaryStyle (placementResult startCoord))) 
+      (\(startCoord, coord, boardCell) -> (coord, mergeCellHelpingHighlight boardCell $ VCanBePlacedHint PrimaryStyle (placementResult startCoord)))
       <$> currentCells
     mergedCellsToUpdate =
       -- Drop the grouping key (coord)
@@ -172,7 +172,7 @@ addHelpHighlight (Game (History (VersionedState _ b _ (PlacingFigure (FigureInSe
 
 cellsToDisplay :: HasCallStack => Game -> PlacingCellsFigure
 cellsToDisplay game = case game ^. currentGame . state of
-  PlacingFigure (FigureInSelection figure _) coord -> 
+  PlacingFigure (FigureInSelection figure _) coord ->
     wrap $ addPlacingFigure figure coord brd
   _ ->
     wrap $ boardToPlacingCells brd
@@ -198,12 +198,12 @@ data FigureToPlace a = FigureToPlace
     _figureKind :: FigureToPlaceKind }
     deriving stock (Show, Eq)
 
-figuresToPlace :: HasCallStack => Game -> [Maybe (FigureToPlace FigureInSelection)]
+figuresToPlace :: HasCallStack => Game -> [Maybe (FigureToPlace FigureInSelection, Clickable)]
 figuresToPlace game =
-  game ^. currentGame 
+  game ^. currentGame
   & _figures
-  & elems
-  & map (fmap (\fig -> FigureToPlace fig $ kind fig)) where
+  & assocs
+  & map (\(ix, maybeFigure) -> fmap (\fig -> (FigureToPlace fig $ kind fig, SelectFigureClickable ix)) maybeFigure) where
     kind :: FigureInSelection -> FigureToPlaceKind
     kind fig =
       case game ^. currentGame . state of
@@ -214,4 +214,4 @@ figuresToPlace game =
     canBePlaced selectedFigure fig@(FigureInSelection figureItself _) selectedMode
       | fig == selectedFigure = selectedMode
       | canBePlacedToBoardAtSomePoint figureItself (game ^. currentGame . board) = CanBePlaced
-      | otherwise = CannotBePlaced      
+      | otherwise = CannotBePlaced

@@ -1,5 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+
 module UI (main) where
 
 import Brickudoku
@@ -9,6 +13,7 @@ import Brickudoku
     Coord,
     UserAction(..),
     SystemAction(..),
+    Clickable(..),
     Action(..),
     score,
     turnNumber,
@@ -21,7 +26,7 @@ import Brickudoku
     autoPlay,
     GameEvent (..),
     FigureInSelection(..),
-    currentGame )
+    currentGame, hoverOver )
 import VisualBoard
   ( VisualCell(..),
     FreeStyle(..),
@@ -32,7 +37,7 @@ import VisualBoard
     HintPlacementResult(..) )
 import Persistence (saveToFile, loadFromFileIfExists)
 
-import Control.Monad.State.Strict ( MonadState(put, get) )
+import Control.Monad.State.Strict ( MonadState(put, get), modify )
 import Brick
   ( App(..), AttrMap, BrickEvent(..), EventM, Widget
   , customMain, neverShowCursor
@@ -40,11 +45,12 @@ import Brick
   , hLimit, vBox, hBox, padLeft, padTop, padAll, Padding(..)
   , withBorderStyle, str
   , attrMap, withAttr, emptyWidget, AttrName, on, fg, bg
-  , (<+>), (<=>), attrName, joinBorders, padLeftRight, vLimit, updateAttrMap )
+  , (<+>), (<=>), attrName, joinBorders, padLeftRight, vLimit, updateAttrMap, clickable, getVtyHandle )
 import qualified Brick.AttrMap as A
 import qualified Brick.Widgets.Border as B
 import qualified Brick.Widgets.Border.Style as BS
 import qualified Brick.Widgets.Center as C
+import qualified Brick.Types as T
 import Control.Lens ((^.))
 import qualified Graphics.Vty as V
 import Data.Array (Array)
@@ -56,17 +62,23 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Brick.BChan (newBChan, writeBChan)
 import Control.Concurrent (threadDelay, forkIO)
-import Control.Monad (forever)
+import Control.Monad ( forever, when )
 import System.Random.Stateful (runStateGen, StdGen, initStdGen)
 import Control.Monad.IO.Class (liftIO)
 
-type Name = ()
+newtype Name = Name Clickable
+  deriving newtype (Show, Eq, Ord)
 
-app :: App FullGameState GameEvent Name
+app :: App (FullGameState Game) GameEvent Name
 app = App { appDraw = drawUI
           , appChooseCursor = neverShowCursor
           , appHandleEvent = handleEvent
-          , appStartEvent = return ()
+          , appStartEvent = do
+              vty <- getVtyHandle
+              let output = V.outputIface vty
+              when (V.supportsMode output V.Mouse) $
+                -- todo check if it is possible to be notified about mouse move events
+                liftIO $ V.setMode output V.Mouse True
           , appAttrMap = const theMap
           }
 
@@ -87,11 +99,27 @@ keyBindings =
     (AppEvent Tick, [SystemAction NextAutoPlayTurn])
   ]
 
-handleEvent :: HasCallStack => BrickEvent Name GameEvent -> EventM Name FullGameState ()
+handleMouseEvent :: HasCallStack => Clickable -> EventM Name (FullGameState Game) ()
+handleMouseEvent name = do
+  (FullGameState game gen) <- get
+  let (actions, gen') = runStateGen gen (possibleActions game)
+  let actionsToApply = filter (\(a, _) -> a == Click name) actions
+  case actionsToApply of
+    [] -> pure ()
+    [(_, game')] -> put $ FullGameState game' gen'
+    _ -> error $ "Multiple applicable actions for click " ++ show name ++ ": " ++ show (fmap fst actionsToApply)
+
+handleEvent :: HasCallStack => BrickEvent Name GameEvent -> EventM Name (FullGameState Game) ()
 handleEvent (VtyEvent (V.EvKey (V.KChar 'Q') [])) = do
   (FullGameState game gen) <- get
-  liftIO $ saveToFile game gen  
+  liftIO $ saveToFile game gen
   halt
+
+handleEvent (T.MouseDown (Name name) V.BLeft [] _)         = handleMouseEvent name
+handleEvent (T.MouseUp (Name name) (Just V.BRight) _)      = handleMouseEvent name
+handleEvent (T.MouseDown (Name name) V.BLeft [V.MShift] _) = modify $ fmap $ hoverOver name
+handleEvent (T.MouseDown (Name name) V.BRight [] _)        = modify $ fmap $ hoverOver name
+
 handleEvent evt = do
   (FullGameState game gen) <- get
   let (actions, gen') = runStateGen gen (possibleActions game)
@@ -106,7 +134,7 @@ handleEvent evt = do
           _ -> error $ "Multiple applicable actions for key " ++ show evt ++ ": " ++ show (fmap fst actionsToApply)
     Nothing -> pure ()
 
-drawUI :: HasCallStack => FullGameState -> [Widget Name]
+drawUI :: HasCallStack => FullGameState Game -> [Widget Name]
 drawUI (FullGameState game _) =
   [
     gameOverWidget,
@@ -135,53 +163,57 @@ drawUI (FullGameState game _) =
         updateAttrMap (A.applyAttrMappings autoPlayBorderMapping)
       else
         id
-    
+
     figuresToPlaceWidgets =
       C.hCenter
       $ withBorderStyle BS.unicodeRounded
       $ B.border
       $ hBox
-      $ map (vLimit 6 . C.vCenter . drawFigureToPlace) 
+      $ map (withClickableId $ vLimit 6 . C.vCenter . drawFigureToPlace)
       $ figuresToPlace game
-    
+
+    withClickableId :: (Maybe a -> Widget Name) -> Maybe (a, Clickable) -> Widget Name
+    withClickableId render Nothing = render Nothing
+    withClickableId render (Just (a, name)) = clickable (Name name) $ render $ Just a
+
     applyGameOverPalette widget =
       if isGameOver game then
         updateAttrMap (A.applyAttrMappings gameOverMap) widget
       else
         widget
-    
-    gameOverWidget = 
+
+    gameOverWidget =
       if isGameOver game then
-        C.centerLayer 
-        $ withAttr gameOverAttr 
-        $ withBorderStyle BS.unicodeRounded 
-        $ B.border 
-        $ hLimit 15 
-        $ vLimit 5 
-        $ C.center 
+        C.centerLayer
+        $ withAttr gameOverAttr
+        $ withBorderStyle BS.unicodeRounded
+        $ B.border
+        $ hLimit 15
+        $ vLimit 5
+        $ C.center
         $ str "Game over"
       else
          emptyWidget
-    
+
     withPlacingFigureBorder :: Widget Name -> Widget Name
     withPlacingFigureBorder widget =
       if isPlacingFigure game then
         updateAttrMap (A.applyAttrMappings selectedPlacingFigureBorderMappings) widget
-      else  
+      else
         widget
 
-    autoPlayBorderMapping = 
+    autoPlayBorderMapping =
       [(B.borderAttr, fg V.brightRed)]
 
     wrapWithAutoPlayBorder :: Widget Name -> Widget Name
     wrapWithAutoPlayBorder widget =
       if game ^. autoPlay then
-        hLimit 60 
+        hLimit 60
         $ C.hCenter
-        $ withBorderStyle BS.unicodeRounded 
-        $ B.borderWithLabel (str " Auto-play ") 
+        $ withBorderStyle BS.unicodeRounded
+        $ B.borderWithLabel (str " Auto-play ")
         $ padAll 2 widget
-      else  
+      else
         hLimit 60 widget
 
 drawScore :: Game -> Widget Name
@@ -227,7 +259,7 @@ drawGrid game =
   $ joinBorders
   $ B.border
   $ padAll 0
-  $ drawFigure drawPlacingCell
+  $ drawFigure drawPlacingCell ClickableCell
   $ cellsToDisplay game
 
 cellWidget :: Widget n
@@ -252,9 +284,13 @@ drawPlacingCell (VCanBePlacedHint AltStyle     JustFigure) = withAttr canBePlace
 drawPlacingCell (VCanBePlacedHint PrimaryStyle Region)     = withAttr canBePlacedWillFreeHintAttr hintWillFreeWidget
 drawPlacingCell (VCanBePlacedHint AltStyle     Region)     = withAttr canBePlacedWillFreeHintAltStyleAttr hintWillFreeWidget
 
-drawFigure :: HasCallStack => (a -> Widget Name) -> Array Coord a -> Widget Name
-drawFigure drawOneCell figure = vBox cellRows where
-  cellRows = hBox . map drawOneCell <$> figureRows figure
+data DrawFigureCellKind = ClickableCell | NotClickableCell deriving (Show, Eq)
+
+drawFigure :: HasCallStack => (a -> Widget Name) -> DrawFigureCellKind -> Array Coord a -> Widget Name
+drawFigure drawOneCell ClickableCell figure = vBox cellRows where
+  cellRows = hBox . map (\(cell, clickableId) -> clickable (Name clickableId) $ drawOneCell cell) <$> figureRows figure
+drawFigure drawOneCell NotClickableCell figure = vBox cellRows where
+  cellRows = hBox . map (drawOneCell . fst) <$> figureRows figure
 
 selectedFigureBorderMappings :: [(A.AttrName, V.Attr)]
 selectedFigureBorderMappings =
@@ -284,7 +320,7 @@ drawSomeFigureToPlace mapping borderStyle drawOneCell figure =
   $ hLimit 10
   $ vLimit 6
   $ C.center
-  $ drawFigure drawOneCell figure
+  $ drawFigure drawOneCell NotClickableCell figure
 
 drawFigureToPlace :: HasCallStack => Maybe (FigureToPlace FigureInSelection) -> Widget Name
 drawFigureToPlace Nothing                                                             = drawSomeFigureToPlace notSelectedCanBePlacedFigureBorderMappings BS.unicodeRounded (\_ -> withAttr emptyCellAttr $ str "  ") emptyFigure
@@ -299,7 +335,7 @@ drawCell Filled = withAttr filledCellAttr cellWidget
 
 --- Attributes ---
 
-emptyCellAttr, emptyAltStyleCellAttr, filledCellAttr, placingCanPlaceFullFigureAttr, 
+emptyCellAttr, emptyAltStyleCellAttr, filledCellAttr, placingCanPlaceFullFigureAttr,
   placingCanPlaceButNotFullFigure, placingCannotPlaceAttr, placingWillBeFreedAttr,
   board3x3BorderAttr,
   canBePlacedHintAttr, canBePlacedHintAltStyleAttr,
@@ -362,9 +398,10 @@ gameOverMap =
     (helpShortcutAttr, fg V.brightBlack)
   ]
 
-data FullGameState = FullGameState 
-  { _game :: Game, 
+data FullGameState a = FullGameState
+  { _game :: a,
     _rng :: StdGen }
+  deriving (Show, Functor)
 
 --- Main ---
 
@@ -372,7 +409,7 @@ lastExceptionHandler :: SomeException -> IO ()
 lastExceptionHandler e = do
   putStrLn $ "Uncaught exception: " <> displayException e
 
-loadOrInitGame :: HasCallStack => IO FullGameState
+loadOrInitGame :: HasCallStack => IO (FullGameState Game)
 loadOrInitGame = do
   loadResult <- loadFromFileIfExists
   case loadResult of
@@ -382,7 +419,7 @@ loadOrInitGame = do
       newGame
     Just (Right (game, gen)) -> return $ FullGameState game gen
   where
-    newGame :: IO FullGameState
+    newGame :: IO (FullGameState Game)
     newGame = do
       gen <- initStdGen
       let (game, gen') = runStateGen gen initGame

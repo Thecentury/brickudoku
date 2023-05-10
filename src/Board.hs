@@ -23,23 +23,25 @@ figureCellCoords = fmap fst . filter (\(_, e) -> e == Filled) . assocs
 
 type Board = Figure
 
-tryMoveFigure :: Board -> Figure -> Coord -> Coord -> Maybe Coord
-tryMoveFigure board figure coord vector =
+validateFigureStartCoord :: Board -> Figure -> Coord -> Maybe Coord
+validateFigureStartCoord board figure coord =
   let
-    newCoord = coord + vector
     figureSize = snd $ bounds figure
     (boardTopLeft, boardBottomRight) = bounds board
     topLeftWithinBoard =
-      newCoord ^. _x >= boardTopLeft ^. _x &&
-      newCoord ^. _y >= boardTopLeft ^. _y
+      coord ^. _x >= boardTopLeft ^. _x &&
+      coord ^. _y >= boardTopLeft ^. _y
     bottomRightWithinBoard =
-      newCoord ^. _x + figureSize ^. _x <= boardBottomRight ^. _x &&
-      newCoord ^. _y + figureSize ^. _y <= boardBottomRight ^. _y
+      coord ^. _x + figureSize ^. _x <= boardBottomRight ^. _x &&
+      coord ^. _y + figureSize ^. _y <= boardBottomRight ^. _y
   in
     if topLeftWithinBoard && bottomRightWithinBoard then
-      Just newCoord
+      Just coord
     else
       Nothing
+
+tryMoveFigure :: Board -> Figure -> Coord -> Coord -> Maybe Coord
+tryMoveFigure board figure coord vector = validateFigureStartCoord board figure (coord + vector)
 
 ----
 

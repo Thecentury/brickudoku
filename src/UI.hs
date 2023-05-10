@@ -61,7 +61,7 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Brick.BChan (newBChan, writeBChan)
 import Control.Concurrent (threadDelay, forkIO)
-import Control.Monad (forever)
+import Control.Monad ( forever, when )
 import System.Random.Stateful (runStateGen, StdGen, initStdGen)
 import Control.Monad.IO.Class (liftIO)
 
@@ -74,8 +74,10 @@ app = App { appDraw = drawUI
           , appHandleEvent = handleEvent
           , appStartEvent = do
               vty <- getVtyHandle
+              let output = V.outputIface vty
+              when (V.supportsMode output V.Mouse) $
               -- todo check if it is possible to be notified about mouse move events
-              liftIO $ V.setMode (V.outputIface vty) V.Mouse True
+                liftIO $ V.setMode output V.Mouse True
           , appAttrMap = const theMap
           }
 

@@ -78,8 +78,6 @@ app = App { appDraw = drawUI
               let output = V.outputIface vty
               when (V.supportsMode output V.Mouse) $
                 -- todo check if it is possible to be notified about mouse move events
-                
-                -- todo check if it is possible to be notified about mouse move events
                 liftIO $ V.setMode output V.Mouse True
           , appAttrMap = const theMap
           }

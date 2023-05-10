@@ -76,7 +76,7 @@ app = App { appDraw = drawUI
               vty <- getVtyHandle
               let output = V.outputIface vty
               when (V.supportsMode output V.Mouse) $
-              -- todo check if it is possible to be notified about mouse move events
+                -- todo check if it is possible to be notified about mouse move events
                 liftIO $ V.setMode output V.Mouse True
           , appAttrMap = const theMap
           }
@@ -101,7 +101,7 @@ keyBindings =
 handleEvent :: HasCallStack => BrickEvent Name GameEvent -> EventM Name FullGameState ()
 handleEvent (VtyEvent (V.EvKey (V.KChar 'Q') [])) = do
   (FullGameState game gen) <- get
-  liftIO $ saveToFile game gen  
+  liftIO $ saveToFile game gen
   halt
 
 handleEvent (T.MouseDown (Name name) _ _ _) = do
@@ -156,57 +156,57 @@ drawUI (FullGameState game _) =
         updateAttrMap (A.applyAttrMappings autoPlayBorderMapping)
       else
         id
-    
+
     figuresToPlaceWidgets =
       C.hCenter
       $ withBorderStyle BS.unicodeRounded
       $ B.border
       $ hBox
-      $ map (withClickableId $ vLimit 6 . C.vCenter . drawFigureToPlace) 
+      $ map (withClickableId $ vLimit 6 . C.vCenter . drawFigureToPlace)
       $ figuresToPlace game
 
     withClickableId :: (Maybe a -> Widget Name) -> Maybe (a, Clickable) -> Widget Name
     withClickableId render Nothing = render Nothing
     withClickableId render (Just (a, name)) = clickable (Name name) $ render $ Just a
-    
+
     applyGameOverPalette widget =
       if isGameOver game then
         updateAttrMap (A.applyAttrMappings gameOverMap) widget
       else
         widget
-    
-    gameOverWidget = 
+
+    gameOverWidget =
       if isGameOver game then
-        C.centerLayer 
-        $ withAttr gameOverAttr 
-        $ withBorderStyle BS.unicodeRounded 
-        $ B.border 
-        $ hLimit 15 
-        $ vLimit 5 
-        $ C.center 
+        C.centerLayer
+        $ withAttr gameOverAttr
+        $ withBorderStyle BS.unicodeRounded
+        $ B.border
+        $ hLimit 15
+        $ vLimit 5
+        $ C.center
         $ str "Game over"
       else
          emptyWidget
-    
+
     withPlacingFigureBorder :: Widget Name -> Widget Name
     withPlacingFigureBorder widget =
       if isPlacingFigure game then
         updateAttrMap (A.applyAttrMappings selectedPlacingFigureBorderMappings) widget
-      else  
+      else
         widget
 
-    autoPlayBorderMapping = 
+    autoPlayBorderMapping =
       [(B.borderAttr, fg V.brightRed)]
 
     wrapWithAutoPlayBorder :: Widget Name -> Widget Name
     wrapWithAutoPlayBorder widget =
       if game ^. autoPlay then
-        hLimit 60 
+        hLimit 60
         $ C.hCenter
-        $ withBorderStyle BS.unicodeRounded 
-        $ B.borderWithLabel (str " Auto-play ") 
+        $ withBorderStyle BS.unicodeRounded
+        $ B.borderWithLabel (str " Auto-play ")
         $ padAll 2 widget
-      else  
+      else
         hLimit 60 widget
 
 drawScore :: Game -> Widget Name
@@ -252,7 +252,7 @@ drawGrid game =
   $ joinBorders
   $ B.border
   $ padAll 0
-  $ drawFigure drawPlacingCell True
+  $ drawFigure drawPlacingCell ClickableCell
   $ cellsToDisplay game
 
 cellWidget :: Widget n
@@ -277,11 +277,12 @@ drawPlacingCell (VCanBePlacedHint AltStyle     JustFigure) = withAttr canBePlace
 drawPlacingCell (VCanBePlacedHint PrimaryStyle Region)     = withAttr canBePlacedWillFreeHintAttr hintWillFreeWidget
 drawPlacingCell (VCanBePlacedHint AltStyle     Region)     = withAttr canBePlacedWillFreeHintAltStyleAttr hintWillFreeWidget
 
--- todo use a special type instead of Bool
-drawFigure :: HasCallStack => (a -> Widget Name) -> Bool -> Array Coord a -> Widget Name
-drawFigure drawOneCell True figure = vBox cellRows where
+data DrawFigureCellKind = ClickableCell | NotClickableCell deriving (Show, Eq)
+
+drawFigure :: HasCallStack => (a -> Widget Name) -> DrawFigureCellKind -> Array Coord a -> Widget Name
+drawFigure drawOneCell ClickableCell figure = vBox cellRows where
   cellRows = hBox . map (\(cell, clickableId) -> clickable (Name clickableId) $ drawOneCell cell) <$> figureRows figure
-drawFigure drawOneCell False figure = vBox cellRows where
+drawFigure drawOneCell NotClickableCell figure = vBox cellRows where
   cellRows = hBox . map (drawOneCell . fst) <$> figureRows figure
 
 selectedFigureBorderMappings :: [(A.AttrName, V.Attr)]
@@ -312,7 +313,7 @@ drawSomeFigureToPlace mapping borderStyle drawOneCell figure =
   $ hLimit 10
   $ vLimit 6
   $ C.center
-  $ drawFigure drawOneCell False figure
+  $ drawFigure drawOneCell NotClickableCell figure
 
 drawFigureToPlace :: HasCallStack => Maybe (FigureToPlace FigureInSelection) -> Widget Name
 drawFigureToPlace Nothing                                                             = drawSomeFigureToPlace notSelectedCanBePlacedFigureBorderMappings BS.unicodeRounded (\_ -> withAttr emptyCellAttr $ str "  ") emptyFigure
@@ -327,7 +328,7 @@ drawCell Filled = withAttr filledCellAttr cellWidget
 
 --- Attributes ---
 
-emptyCellAttr, emptyAltStyleCellAttr, filledCellAttr, placingCanPlaceFullFigureAttr, 
+emptyCellAttr, emptyAltStyleCellAttr, filledCellAttr, placingCanPlaceFullFigureAttr,
   placingCanPlaceButNotFullFigure, placingCannotPlaceAttr, placingWillBeFreedAttr,
   board3x3BorderAttr,
   canBePlacedHintAttr, canBePlacedHintAltStyleAttr,
@@ -390,8 +391,8 @@ gameOverMap =
     (helpShortcutAttr, fg V.brightBlack)
   ]
 
-data FullGameState = FullGameState 
-  { _game :: Game, 
+data FullGameState = FullGameState
+  { _game :: Game,
     _rng :: StdGen }
 
 --- Main ---

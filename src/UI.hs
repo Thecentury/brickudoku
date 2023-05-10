@@ -115,8 +115,8 @@ handleEvent (VtyEvent (V.EvKey (V.KChar 'Q') [])) = do
   liftIO $ saveToFile game gen
   halt
 
-handleEvent (T.MouseDown (Name name) V.BLeft [] _)         = handleMouseEvent name
 handleEvent (T.MouseUp (Name name) (Just V.BRight) _)      = handleMouseEvent name
+handleEvent (T.MouseUp (Name name) (Just V.BLeft) _)       = handleMouseEvent name
 handleEvent (T.MouseDown (Name name) V.BLeft [V.MShift] _) = modify $ fmap $ hoverOver name
 handleEvent (T.MouseDown (Name name) V.BRight [] _)        = modify $ fmap $ hoverOver name
 

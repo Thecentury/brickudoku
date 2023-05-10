@@ -98,13 +98,8 @@ keyBindings =
     (AppEvent Tick, [SystemAction NextAutoPlayTurn])
   ]
 
-handleEvent :: HasCallStack => BrickEvent Name GameEvent -> EventM Name FullGameState ()
-handleEvent (VtyEvent (V.EvKey (V.KChar 'Q') [])) = do
-  (FullGameState game gen) <- get
-  liftIO $ saveToFile game gen
-  halt
-
-handleEvent (T.MouseDown (Name name) V.BLeft [] _) = do
+handleMouseEvent :: HasCallStack => Clickable -> EventM Name FullGameState ()
+handleMouseEvent name = do
   (FullGameState game gen) <- get
   let (actions, gen') = runStateGen gen (possibleActions game)
   let actionsToApply = filter (\(a, _) -> a == Click name) actions
@@ -112,6 +107,15 @@ handleEvent (T.MouseDown (Name name) V.BLeft [] _) = do
     [] -> pure ()
     [(_, game')] -> put $ FullGameState game' gen'
     _ -> error $ "Multiple applicable actions for click " ++ show name ++ ": " ++ show (fmap fst actionsToApply)
+
+handleEvent :: HasCallStack => BrickEvent Name GameEvent -> EventM Name FullGameState ()
+handleEvent (VtyEvent (V.EvKey (V.KChar 'Q') [])) = do
+  (FullGameState game gen) <- get
+  liftIO $ saveToFile game gen
+  halt
+
+handleEvent (T.MouseDown (Name name) V.BLeft [] _)    = handleMouseEvent name
+handleEvent (T.MouseUp (Name name) (Just V.BRight) _) = handleMouseEvent name
 
 handleEvent (T.MouseDown (Name name) V.BRight [] _) = do
   (FullGameState game gen) <- get

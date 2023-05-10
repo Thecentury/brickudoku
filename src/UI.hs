@@ -25,7 +25,7 @@ import Brickudoku
     autoPlay,
     GameEvent (..),
     FigureInSelection(..),
-    currentGame )
+    currentGame, hoverOver )
 import VisualBoard
   ( VisualCell(..),
     FreeStyle(..),
@@ -104,7 +104,7 @@ handleEvent (VtyEvent (V.EvKey (V.KChar 'Q') [])) = do
   liftIO $ saveToFile game gen
   halt
 
-handleEvent (T.MouseDown (Name name) _ _ _) = do
+handleEvent (T.MouseDown (Name name) V.BLeft [] _) = do
   (FullGameState game gen) <- get
   let (actions, gen') = runStateGen gen (possibleActions game)
   let actionsToApply = filter (\(a, _) -> a == Click name) actions
@@ -112,6 +112,11 @@ handleEvent (T.MouseDown (Name name) _ _ _) = do
     [] -> pure ()
     [(_, game')] -> put $ FullGameState game' gen'
     _ -> error $ "Multiple applicable actions for click " ++ show name ++ ": " ++ show (fmap fst actionsToApply)
+
+handleEvent (T.MouseDown (Name name) V.BRight [] _) = do
+  (FullGameState game gen) <- get
+  let game' = hoverOver game name
+  put $ FullGameState game' gen
 
 handleEvent evt = do
   (FullGameState game gen) <- get

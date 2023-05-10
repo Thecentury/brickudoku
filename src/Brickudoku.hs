@@ -24,6 +24,7 @@ module Brickudoku
     Action(..),
     GameEvent(..),
     clickableForCell,
+    hoverOver,
     -- Lenses
     score,
     turnNumber,
@@ -71,7 +72,7 @@ import Board
       tryMoveFigure,
       tryPlaceFigure,
       Board,
-      Figure )
+      Figure, validateFigureStartCoord )
 
 ----
 
@@ -198,7 +199,7 @@ previousFigureIndices :: FigureIndex -> [FigureIndex]
 previousFigureIndices currentFigureIndex =
   (`rem` figuresToPlaceCount) <$> [figuresToPlaceCount + currentFigureIndex - 1, figuresToPlaceCount + currentFigureIndex - 2]
 
-tryFindNextFigureToSelect :: HasCallStack => Figure -> Array FigureIndex (Maybe FigureInSelection) -> [FigureIndex] -> Maybe FigureInSelection
+tryFindNextFigureToSelect :: HasCallStack => Board -> Array FigureIndex (Maybe FigureInSelection) -> [FigureIndex] -> Maybe FigureInSelection
 tryFindNextFigureToSelect b figs nextIndices =
   join $ find canBeSelected nexts where
     canBeSelected :: Maybe FigureInSelection -> Bool
@@ -224,7 +225,8 @@ data UserAction =
   MoveFigureUp |
   StartPlacingFigure |
   CancelPlacingFigure |
-  PlaceFigure
+  PlaceFigure |
+  MoveFigureTo Coord
   deriving stock (Eq, Show)
 
 data SystemAction =
@@ -278,6 +280,7 @@ nextAutoPlayTurnAction gen game generateAutoPlay = do
 actionsAccordingToProbability :: [(UserAction, a)] -> [(UserAction, a)]
 actionsAccordingToProbability = concatMap (\(action, game) -> replicate (userActionProbability action) (action, game))
 
+-- todo move to MyPrelude
 randomElement :: StatefulGen g m => g -> [a] -> m a
 randomElement gen list = do
   randomIndex <- uniformRM (0, length list - 1) gen
@@ -285,7 +288,7 @@ randomElement gen list = do
 
 clickableFigureAction :: Game -> FigureIndex -> Maybe (Action, Game)
 clickableFigureAction game figureIx = do
-  fig <- (game ^. currentGame . figures) ! figureIx
+  fig <- tryFindNextFigureToSelect (game ^. currentGame . board) (game ^. currentGame . figures) [figureIx]
   let (FigureInSelection figureItself _) = fig
   let coord = fromMaybe zeroCoord $ listToMaybe $ pointsWhereFigureCanBePlaced figureItself (game ^. currentGame . board)
   let game' = updateCurrentNotVersioned game $ state .~ PlacingFigure fig coord
@@ -325,6 +328,19 @@ clickToPlaceFigureActions :: StatefulGen g m => g -> Game -> FigureInSelection -
 clickToPlaceFigureActions gen game figure@(FigureInSelection selectedFigure _) = do
   let startCoordinates = pointsWhereFigureCanBePlaced selectedFigure (game ^. currentGame . board)
   fmap catMaybes <$> forM startCoordinates $ \coord -> placeFigureAction gen game figure (Click $ PlaceFigureClickable coord) coord
+
+hoverOver :: Game -> Clickable -> Game
+hoverOver g clickable =
+  case hover (g ^. currentGame . state) clickable (g ^. currentGame . board) of 
+    Just state' -> updateCurrentNotVersioned g $ state .~ state'
+    Nothing -> g
+  where
+    hover :: GameState -> Clickable -> Board -> Maybe GameState
+    hover (PlacingFigure figure@(FigureInSelection fig _) _) (PlaceFigureClickable coord) b =
+      PlacingFigure figure <$> validateFigureStartCoord b fig coord
+    hover (SelectingFigure figure@(FigureInSelection fig _)) (PlaceFigureClickable coord) b =
+      PlacingFigure figure <$> validateFigureStartCoord b fig coord
+    hover _ _ _ = Nothing
 
 -- todo create own monad/type like Tetris does?
 -- todo merge with 'possibleActions'?

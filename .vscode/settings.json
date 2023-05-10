@@ -8,6 +8,7 @@
     "curr",
     "elems",
     "fmap",
+    "foldl",
     "HLINT",
     "Iface",
     "mapi",

@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module UI (main) where
@@ -36,7 +37,7 @@ import VisualBoard
     HintPlacementResult(..) )
 import Persistence (saveToFile, loadFromFileIfExists)
 
-import Control.Monad.State.Strict ( MonadState(put, get) )
+import Control.Monad.State.Strict ( MonadState(put, get), modify )
 import Brick
   ( App(..), AttrMap, BrickEvent(..), EventM, Widget
   , customMain, neverShowCursor
@@ -68,7 +69,7 @@ import Control.Monad.IO.Class (liftIO)
 newtype Name = Name Clickable
   deriving newtype (Show, Eq, Ord)
 
-app :: App FullGameState GameEvent Name
+app :: App (FullGameState Game) GameEvent Name
 app = App { appDraw = drawUI
           , appChooseCursor = neverShowCursor
           , appHandleEvent = handleEvent
@@ -76,6 +77,8 @@ app = App { appDraw = drawUI
               vty <- getVtyHandle
               let output = V.outputIface vty
               when (V.supportsMode output V.Mouse) $
+                -- todo check if it is possible to be notified about mouse move events
+                
                 -- todo check if it is possible to be notified about mouse move events
                 liftIO $ V.setMode output V.Mouse True
           , appAttrMap = const theMap
@@ -98,7 +101,7 @@ keyBindings =
     (AppEvent Tick, [SystemAction NextAutoPlayTurn])
   ]
 
-handleMouseEvent :: HasCallStack => Clickable -> EventM Name FullGameState ()
+handleMouseEvent :: HasCallStack => Clickable -> EventM Name (FullGameState Game) ()
 handleMouseEvent name = do
   (FullGameState game gen) <- get
   let (actions, gen') = runStateGen gen (possibleActions game)
@@ -108,7 +111,7 @@ handleMouseEvent name = do
     [(_, game')] -> put $ FullGameState game' gen'
     _ -> error $ "Multiple applicable actions for click " ++ show name ++ ": " ++ show (fmap fst actionsToApply)
 
-handleEvent :: HasCallStack => BrickEvent Name GameEvent -> EventM Name FullGameState ()
+handleEvent :: HasCallStack => BrickEvent Name GameEvent -> EventM Name (FullGameState Game) ()
 handleEvent (VtyEvent (V.EvKey (V.KChar 'Q') [])) = do
   (FullGameState game gen) <- get
   liftIO $ saveToFile game gen
@@ -116,11 +119,7 @@ handleEvent (VtyEvent (V.EvKey (V.KChar 'Q') [])) = do
 
 handleEvent (T.MouseDown (Name name) V.BLeft [] _)    = handleMouseEvent name
 handleEvent (T.MouseUp (Name name) (Just V.BRight) _) = handleMouseEvent name
-
-handleEvent (T.MouseDown (Name name) V.BRight [] _) = do
-  (FullGameState game gen) <- get
-  let game' = hoverOver game name
-  put $ FullGameState game' gen
+handleEvent (T.MouseDown (Name name) V.BRight [] _)   = modify $ fmap $ hoverOver name
 
 handleEvent evt = do
   (FullGameState game gen) <- get
@@ -136,7 +135,7 @@ handleEvent evt = do
           _ -> error $ "Multiple applicable actions for key " ++ show evt ++ ": " ++ show (fmap fst actionsToApply)
     Nothing -> pure ()
 
-drawUI :: HasCallStack => FullGameState -> [Widget Name]
+drawUI :: HasCallStack => FullGameState Game -> [Widget Name]
 drawUI (FullGameState game _) =
   [
     gameOverWidget,
@@ -400,9 +399,10 @@ gameOverMap =
     (helpShortcutAttr, fg V.brightBlack)
   ]
 
-data FullGameState = FullGameState
-  { _game :: Game,
+data FullGameState a = FullGameState
+  { _game :: a,
     _rng :: StdGen }
+  deriving (Show, Functor)
 
 --- Main ---
 
@@ -410,7 +410,7 @@ lastExceptionHandler :: SomeException -> IO ()
 lastExceptionHandler e = do
   putStrLn $ "Uncaught exception: " <> displayException e
 
-loadOrInitGame :: HasCallStack => IO FullGameState
+loadOrInitGame :: HasCallStack => IO (FullGameState Game)
 loadOrInitGame = do
   loadResult <- loadFromFileIfExists
   case loadResult of
@@ -420,7 +420,7 @@ loadOrInitGame = do
       newGame
     Just (Right (game, gen)) -> return $ FullGameState game gen
   where
-    newGame :: IO FullGameState
+    newGame :: IO (FullGameState Game)
     newGame = do
       gen <- initStdGen
       let (game, gen') = runStateGen gen initGame

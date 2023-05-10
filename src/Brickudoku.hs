@@ -329,8 +329,8 @@ clickToPlaceFigureActions gen game figure@(FigureInSelection selectedFigure _) =
   let startCoordinates = pointsWhereFigureCanBePlaced selectedFigure (game ^. currentGame . board)
   fmap catMaybes <$> forM startCoordinates $ \coord -> placeFigureAction gen game figure (Click $ PlaceFigureClickable coord) coord
 
-hoverOver :: Game -> Clickable -> Game
-hoverOver g clickable =
+hoverOver :: Clickable -> Game -> Game
+hoverOver clickable g =
   case hover (g ^. currentGame . state) clickable (g ^. currentGame . board) of 
     Just state' -> updateCurrentNotVersioned g $ state .~ state'
     Nothing -> g

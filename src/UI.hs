@@ -274,7 +274,7 @@ hintWillFreeWidget = str "◤◢"
 
 drawPlacingCell :: VisualCell -> Widget Name
 drawPlacingCell (VFree PrimaryStyle) = withAttr emptyCellAttr cellWidget
-drawPlacingCell (VFree AltStyle)     = withAttr emptyAltStyleCellAttr cellWidget
+drawPlacingCell (VFree AltStyle)     = withAttr altStyle cellWidget
 drawPlacingCell VFilled = withAttr filledCellAttr cellWidget
 drawPlacingCell VCanPlaceFullFigure = withAttr placingCanPlaceFullFigureAttr cellWidget
 drawPlacingCell VCanPlaceButNotFullFigure = withAttr placingCanPlaceButNotFullFigure cellWidget
@@ -336,14 +336,14 @@ drawCell Filled = withAttr filledCellAttr cellWidget
 
 --- Attributes ---
 
-emptyCellAttr, emptyAltStyleCellAttr, filledCellAttr, placingCanPlaceFullFigureAttr,
+emptyCellAttr, altStyle, filledCellAttr, placingCanPlaceFullFigureAttr,
   placingCanPlaceButNotFullFigure, placingCannotPlaceAttr, placingWillBeFreedAttr,
   board3x3BorderAttr,
   canBePlacedHintAttr, canBePlacedHintAltStyleAttr,
   canBePlacedWillFreeHintAttr, canBePlacedWillFreeHintAltStyleAttr,
   helpShortcutAttr, gameOverAttr :: AttrName
 emptyCellAttr                       = attrName "emptyCell"
-emptyAltStyleCellAttr               = attrName "emptyAltStyleCell"
+altStyle                            = attrName "altStyle"
 filledCellAttr                      = attrName "filledCell"
 placingCanPlaceFullFigureAttr       = attrName "placingCanPlaceFullFigure"
 placingCanPlaceButNotFullFigure     = attrName "placingCanPlaceButNotFullFigure"
@@ -351,9 +351,9 @@ placingCannotPlaceAttr              = attrName "placingCannotPlace"
 placingWillBeFreedAttr              = attrName "placingWillBeFreed"
 board3x3BorderAttr                  = attrName "board3x3Border"
 canBePlacedHintAttr                 = attrName "canBePlacedHint"
-canBePlacedHintAltStyleAttr         = attrName "canBePlacedHintAltStyle"
+canBePlacedHintAltStyleAttr         = altStyle <> canBePlacedHintAttr <> attrName "canBePlacedHintAltStyle"
 canBePlacedWillFreeHintAttr         = attrName "canBePlacedWillFreeHint"
-canBePlacedWillFreeHintAltStyleAttr = attrName "canBePlacedWillFreeHintAltStyle"
+canBePlacedWillFreeHintAltStyleAttr = altStyle <> canBePlacedWillFreeHintAttr <> attrName "canBePlacedWillFreeHintAltStyle"
 helpShortcutAttr                    = attrName "helpShortcut"
 gameOverAttr                        = attrName "gameOver"
 
@@ -361,18 +361,17 @@ theMap :: AttrMap
 theMap = attrMap V.defAttr
   [
     (emptyCellAttr, V.defAttr),
-    (emptyAltStyleCellAttr, bg V.brightWhite),
+    (altStyle, bg V.brightWhite),
     (filledCellAttr, V.blue `on` V.blue),
     (placingCanPlaceFullFigureAttr, V.brightBlue `on` V.brightBlue),
     (placingCanPlaceButNotFullFigure, V.magenta `on` V.magenta),
     (placingCannotPlaceAttr, V.yellow `on` V.yellow),
     (placingWillBeFreedAttr, V.green `on` V.green),
     (board3x3BorderAttr, fg V.white),
-    -- todo somehow combine these 4.
-    (canBePlacedHintAttr, fg V.green),
-    (canBePlacedHintAltStyleAttr, V.green `on` V.brightWhite),
+    (canBePlacedHintAttr,         fg V.green),
+    (canBePlacedHintAltStyleAttr, fg V.green),
     (canBePlacedWillFreeHintAttr, fg V.yellow),
-    (canBePlacedWillFreeHintAltStyleAttr, V.yellow `on` V.brightWhite),
+    (canBePlacedWillFreeHintAltStyleAttr, fg V.yellow),
     (gameOverAttr, fg V.red),
     (helpShortcutAttr, fg V.blue)
   ]
@@ -384,7 +383,7 @@ gameOverMap =
   in
   [
     (emptyCellAttr, V.defAttr),
-    (emptyAltStyleCellAttr, V.defAttr),
+    (altStyle, V.defAttr),
     (filledCellAttr, disabled),
     (placingCanPlaceFullFigureAttr, disabled),
     (placingCanPlaceButNotFullFigure, disabled),

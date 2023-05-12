@@ -45,7 +45,8 @@ import Brick
   , hLimit, vBox, hBox, padLeft, padTop, padAll, Padding(..)
   , withBorderStyle, str
   , attrMap, withAttr, emptyWidget, AttrName, on, fg, bg
-  , (<+>), (<=>), attrName, joinBorders, padLeftRight, vLimit, updateAttrMap, clickable, getVtyHandle )
+  , (<+>), (<=>), attrName, joinBorders, padLeftRight, vLimit, 
+  updateAttrMap, clickable, getVtyHandle )
 import qualified Brick.AttrMap as A
 import qualified Brick.Widgets.Border as B
 import qualified Brick.Widgets.Border.Style as BS
@@ -99,8 +100,8 @@ keyBindings =
     (AppEvent Tick, [SystemAction NextAutoPlayTurn])
   ]
 
-handleMouseEvent :: HasCallStack => Clickable -> EventM Name (FullGameState Game) ()
-handleMouseEvent name = do
+handleMouseUpEvent :: HasCallStack => Clickable -> EventM Name (FullGameState Game) ()
+handleMouseUpEvent name = do
   (FullGameState game gen) <- get
   let (actions, gen') = runStateGen gen (possibleActions game)
   let actionsToApply = filter (\(a, _) -> a == Click name) actions
@@ -115,8 +116,8 @@ handleEvent (VtyEvent (V.EvKey (V.KChar 'Q') [])) = do
   liftIO $ saveToFile game gen
   halt
 
-handleEvent (T.MouseUp (Name name) (Just V.BRight) _)      = handleMouseEvent name
-handleEvent (T.MouseUp (Name name) (Just V.BLeft) _)       = handleMouseEvent name
+handleEvent (T.MouseUp (Name name) (Just V.BRight) _)      = handleMouseUpEvent name
+handleEvent (T.MouseUp (Name name) (Just V.BLeft) _)       = handleMouseUpEvent name
 handleEvent (T.MouseDown (Name name) V.BLeft [V.MShift] _) = modify $ fmap $ hoverOver name
 handleEvent (T.MouseDown (Name name) V.BRight [] _)        = modify $ fmap $ hoverOver name
 

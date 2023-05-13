@@ -4,12 +4,14 @@ module MyPrelude
     (!),
     mapi,
     width2d,
-    height2d ) where
+    height2d,
+    randomElement ) where
 
 import Data.Array ( (//), Array, Ix, assocs, array, bounds, inRange )
 import qualified Data.Array as Array
 import GHC.Stack (HasCallStack)
 import Linear.V2 (V2(..))
+import System.Random.Stateful (StatefulGen, UniformRange (uniformRM))
 
 --------------------------------------------------------------------------------
 
@@ -45,3 +47,10 @@ height2d :: Array (V2 Int) a -> Int
 height2d a = y2 - y1 + 1
   where
     (V2 _ y1, V2 _ y2) = bounds a
+
+----
+
+randomElement :: StatefulGen g m => g -> [a] -> m a
+randomElement gen list = do
+  randomIndex <- uniformRM (0, length list - 1) gen
+  pure $ list !! randomIndex

@@ -47,9 +47,9 @@ import Data.Maybe (mapMaybe, isNothing, catMaybes, listToMaybe, fromMaybe)
 import Linear.V2 (V2(..))
 import GHC.Stack (HasCallStack)
 import GHC.Generics ( Generic )
-import System.Random.Stateful (StatefulGen, UniformRange (uniformRM))
+import System.Random.Stateful (StatefulGen)
 
-import MyPrelude ( mapiArray, (!), mapi, width2d, height2d )
+import MyPrelude ( mapiArray, (!), mapi, width2d, height2d, randomElement )
 import Undo (History(..), newHistory, put, current, tryUndoUntilDifferentL, tryRedoUntilDifferentL)
 import Primitives
     ( vectorDown,
@@ -279,12 +279,6 @@ nextAutoPlayTurnAction gen game generateAutoPlay = do
 
 actionsAccordingToProbability :: [(UserAction, a)] -> [(UserAction, a)]
 actionsAccordingToProbability = concatMap (\(action, game) -> replicate (userActionProbability action) (action, game))
-
--- todo move to MyPrelude
-randomElement :: StatefulGen g m => g -> [a] -> m a
-randomElement gen list = do
-  randomIndex <- uniformRM (0, length list - 1) gen
-  pure $ list !! randomIndex
 
 clickableFigureAction :: Game -> FigureIndex -> Maybe (Action, Game)
 clickableFigureAction game figureIx = do

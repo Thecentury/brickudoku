@@ -80,18 +80,17 @@ app = App { appDraw = drawUI
               when (V.supportsMode output V.Mouse) $
                 -- todo check if it is possible to be notified about mouse move events
                 liftIO $ V.setMode output V.Mouse True
-          , appAttrMap = const theMap
-          }
+          , appAttrMap = const theMap }
 
 keyBindings :: Map (BrickEvent Name GameEvent) [Action]
 keyBindings =
   Map.fromList [
-    (VtyEvent (V.EvKey V.KRight []), [UserAction MoveFigureRight, UserAction SelectNextFigure]),
-    (VtyEvent (V.EvKey V.KLeft []), [UserAction MoveFigureLeft, UserAction SelectPreviousFigure]),
-    (VtyEvent (V.EvKey V.KUp []), [UserAction MoveFigureUp]),
-    (VtyEvent (V.EvKey V.KDown []), [UserAction MoveFigureDown]),
-    (VtyEvent (V.EvKey V.KEnter []), [UserAction StartPlacingFigure, UserAction PlaceFigure]),
-    (VtyEvent (V.EvKey V.KEsc []), [UserAction CancelPlacingFigure]),
+    (VtyEvent (V.EvKey V.KRight []),      [UserAction MoveFigureRight, UserAction SelectNextFigure]),
+    (VtyEvent (V.EvKey V.KLeft []),       [UserAction MoveFigureLeft, UserAction SelectPreviousFigure]),
+    (VtyEvent (V.EvKey V.KUp []),         [UserAction MoveFigureUp]),
+    (VtyEvent (V.EvKey V.KDown []),       [UserAction MoveFigureDown]),
+    (VtyEvent (V.EvKey V.KEnter []),      [UserAction StartPlacingFigure, UserAction PlaceFigure]),
+    (VtyEvent (V.EvKey V.KEsc []),        [UserAction CancelPlacingFigure]),
     (VtyEvent (V.EvKey (V.KChar 'R') []), [SystemAction RestartGame]),
     (VtyEvent (V.EvKey (V.KChar 'A') []), [SystemAction ToggleAutoPlay]),
     (VtyEvent (V.EvKey (V.KChar 'H') []), [SystemAction ToggleEasyMode]),
@@ -103,7 +102,7 @@ keyBindings =
     (VtyEvent (V.EvKey (V.KChar '@') []), [UserAction $ SelectFigureNumber 1]),
     (VtyEvent (V.EvKey (V.KChar '3') []), [UserAction $ SelectFigureNumber 2]),
     (VtyEvent (V.EvKey (V.KChar '#') []), [UserAction $ SelectFigureNumber 2]),
-    (AppEvent Tick, [SystemAction NextAutoPlayTurn])
+    (AppEvent Tick,                       [SystemAction NextAutoPlayTurn])
   ]
 
 handleMouseUpEvent :: HasCallStack => Clickable -> EventM Name (FullGameState Game) ()

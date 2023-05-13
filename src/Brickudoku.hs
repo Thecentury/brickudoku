@@ -219,6 +219,7 @@ data Clickable =
 data UserAction =
   SelectNextFigure |
   SelectPreviousFigure |
+  SelectFigureNumber Int |
   MoveFigureRight |
   MoveFigureLeft |
   MoveFigureDown |
@@ -347,10 +348,10 @@ possibleActionsImpl gen game generateAutoPlay = do
         newGame <- restartGameAction gen
         autoPlayTurn <- nextAutoPlayTurnAction gen game generateAutoPlay
         clickToPlaceActions <- clickToPlaceFigureActions gen game figure
-        pure $ clickToPlaceActions ++ catMaybes
+        pure $ selectFiguresByNumber ++ clickToPlaceActions ++ catMaybes
           [
-            moveFigure (UserAction SelectNextFigure) nextFigureIndices,
-            moveFigure (UserAction SelectPreviousFigure) previousFigureIndices,
+            moveSelectedFigure (UserAction SelectNextFigure) nextFigureIndices,
+            moveSelectedFigure (UserAction SelectPreviousFigure) previousFigureIndices,
             clickableFigureAction game $ nextFigureIndices figureIndex !! 0,
             clickableFigureAction game $ nextFigureIndices figureIndex !! 1,
             startPlacing,
@@ -362,8 +363,17 @@ possibleActionsImpl gen game generateAutoPlay = do
             redoAction game
           ]
 
-      moveFigure :: HasCallStack => Action -> (FigureIndex -> [FigureIndex]) -> Maybe (Action, Game)
-      moveFigure action calculateNextIndices = do
+      selectFiguresByNumber =
+        catMaybes [selectFigureN (UserAction $ SelectFigureNumber n) n | n <- [0 .. figuresToPlaceCount - 1]]
+
+      selectFigureN :: HasCallStack => Action -> FigureIndex -> Maybe (Action, Game)
+      selectFigureN action ix = do
+        nextFigure <- tryFindNextFigureToSelect (game ^. currentGame . board) (game ^. currentGame . figures) [ix]
+        let game' = updateCurrentNotVersioned game $ state .~ SelectingFigure nextFigure
+        pure (action, game')
+
+      moveSelectedFigure :: HasCallStack => Action -> (FigureIndex -> [FigureIndex]) -> Maybe (Action, Game)
+      moveSelectedFigure action calculateNextIndices = do
         let nextIndices = calculateNextIndices figureIndex
         nextFigure <- tryFindNextFigureToSelect (game ^. currentGame . board) (game ^. currentGame . figures) nextIndices
         let game' = updateCurrentNotVersioned game $ state .~ SelectingFigure nextFigure
@@ -384,13 +394,27 @@ possibleActionsImpl gen game generateAutoPlay = do
         let game' = updateCurrentNotVersioned game $ state .~ PlacingFigure figure newCoord
         pure (action, game')
 
+      selectFiguresByNumber =
+        catMaybes [selectFigureN (UserAction $ SelectFigureNumber n) n | n <- [0 .. figuresToPlaceCount - 1]]
+
+      selectFigureN :: HasCallStack => Action -> FigureIndex -> Maybe (Action, Game)
+      selectFigureN action ix = do
+        nextFigure <- tryFindNextFigureToSelect (game ^. currentGame . board) (game ^. currentGame . figures) [ix]
+        let (FigureInSelection fig _) = nextFigure
+        -- todo this code is repeated several times
+        let center = centerFigureTopLeft (game ^. currentGame . board) fig
+        let newCoord = fromMaybe center $ listToMaybe $ pointsWhereFigureCanBePlaced fig (game ^. currentGame . board)
+        let actualCoord = fromMaybe newCoord $ validateFigureStartCoord board_ fig coord
+        let game' = updateCurrentNotVersioned game $ state .~ PlacingFigure nextFigure actualCoord
+        pure (action, game')
+
       actions :: StatefulGen g m => g -> m [(Action, Game)]
       actions gen' = do
         placeAction <- placeFigureAction gen' game figure (UserAction PlaceFigure) coord
         newGame <- restartGameAction gen'
         autoPlayTurn <- nextAutoPlayTurnAction gen' game generateAutoPlay
         clickToPlaceActions <- clickToPlaceFigureActions gen' game figure
-        pure $ clickToPlaceActions ++ catMaybes [
+        pure $ selectFiguresByNumber ++ clickToPlaceActions ++ catMaybes [
             tryMove vectorRight $ UserAction MoveFigureRight,
             tryMove vectorLeft $ UserAction MoveFigureLeft,
             tryMove vectorDown $ UserAction MoveFigureDown,

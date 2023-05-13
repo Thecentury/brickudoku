@@ -97,6 +97,12 @@ keyBindings =
     (VtyEvent (V.EvKey (V.KChar 'H') []), [SystemAction ToggleEasyMode]),
     (VtyEvent (V.EvKey (V.KChar 'u') []), [SystemAction Undo]),
     (VtyEvent (V.EvKey (V.KChar 'r') []), [SystemAction Redo]),
+    (VtyEvent (V.EvKey (V.KChar '1') []), [UserAction $ SelectFigureNumber 0]),
+    (VtyEvent (V.EvKey (V.KChar '!') []), [UserAction $ SelectFigureNumber 0]),
+    (VtyEvent (V.EvKey (V.KChar '2') []), [UserAction $ SelectFigureNumber 1]),
+    (VtyEvent (V.EvKey (V.KChar '@') []), [UserAction $ SelectFigureNumber 1]),
+    (VtyEvent (V.EvKey (V.KChar '3') []), [UserAction $ SelectFigureNumber 2]),
+    (VtyEvent (V.EvKey (V.KChar '#') []), [UserAction $ SelectFigureNumber 2]),
     (AppEvent Tick, [SystemAction NextAutoPlayTurn])
   ]
 

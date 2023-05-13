@@ -53,10 +53,10 @@ figureCenter :: Figure -> Coord
 figureCenter f = V2 (mid $ width2d f) (mid $ height2d f) where
   mid :: Int -> Int
   mid dim | odd dim = dim `div` 2     -- Mid of width 3 is coord 1. 
-  mid dim           = dim `div` 2 - 1 
+  mid dim           = dim `div` 2 - 1
 
 centerFigureTopLeft :: Board -> Figure -> Coord
-centerFigureTopLeft b f = figureCenter b - figureCenter f 
+centerFigureTopLeft b f = figureCenter b - figureCenter f
 
 ----
 
@@ -203,8 +203,8 @@ possibleFiguresData =
 
 mkFigure :: [[Int]] -> Figure
 mkFigure idx =
-  array 
-    (zeroCoord, V2 (figureWidth - 1) (figureHeight - 1)) 
+  array
+    (zeroCoord, V2 (figureWidth - 1) (figureHeight - 1))
     [(V2 x y, intToCell $ numberAt (V2 x y)) | y <- [0 .. figureHeight - 1], x <- [0 .. figureWidth - 1]]
   where
     figureHeight = length idx
@@ -225,7 +225,7 @@ emptyFigure = mkFigure [[0]]
 
 rotateFigureClockwise :: HasCallStack => Figure -> Figure
 rotateFigureClockwise f =
-  array 
+  array
     (zeroCoord, V2 (newWidth - 1) (newHeight - 1))
     [(V2 (figureHeight - 1 - y) x, f ! V2 x y) | y <- [0 .. figureHeight - 1], x <- [0 .. figureWidth - 1]]
     where

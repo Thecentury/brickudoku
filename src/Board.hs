@@ -12,7 +12,7 @@ import Linear.V2 (V2(..), _x, _y)
 import MyPrelude ( (!), width2d, height2d )
 import GHC.Stack (HasCallStack)
 
-import Primitives ( Cell(..), Coord, RangeKind(..) )
+import Primitives ( Cell(..), Coord, RangeKind(..), zeroCoord )
 
 --------------------------------------------------------------------------------
 
@@ -48,6 +48,17 @@ tryMoveFigure board figure coord vector = validateFigureStartCoord board figure 
 boardSize, figuresToPlaceCount :: Int
 boardSize = 9
 figuresToPlaceCount = 3
+
+figureCenter :: Figure -> Coord
+figureCenter f = V2 (mid $ width2d f) (mid $ height2d f) where
+  mid :: Int -> Int
+  mid dim | odd dim = dim `div` 2     -- Mid of width 3 is coord 1. 
+  mid dim           = dim `div` 2 - 1 
+
+centerFigureTopLeft :: Board -> Figure -> Coord
+centerFigureTopLeft b f = figureCenter b - figureCenter f 
+
+----
 
 -- | Frees cells by specified coordinates
 freeAllCells :: Board -> [Coord] -> Board
@@ -193,7 +204,7 @@ possibleFiguresData =
 mkFigure :: [[Int]] -> Figure
 mkFigure idx =
   array 
-    (V2 0 0, V2 (figureWidth - 1) (figureHeight - 1)) 
+    (zeroCoord, V2 (figureWidth - 1) (figureHeight - 1)) 
     [(V2 x y, intToCell $ numberAt (V2 x y)) | y <- [0 .. figureHeight - 1], x <- [0 .. figureWidth - 1]]
   where
     figureHeight = length idx
@@ -215,7 +226,7 @@ emptyFigure = mkFigure [[0]]
 rotateFigureClockwise :: HasCallStack => Figure -> Figure
 rotateFigureClockwise f =
   array 
-    (V2 0 0, V2 (newWidth - 1) (newHeight - 1))
+    (zeroCoord, V2 (newWidth - 1) (newHeight - 1))
     [(V2 (figureHeight - 1 - y) x, f ! V2 x y) | y <- [0 .. figureHeight - 1], x <- [0 .. figureWidth - 1]]
     where
       figureWidth = width2d f

@@ -72,7 +72,7 @@ import Board
       tryMoveFigure,
       tryPlaceFigure,
       Board,
-      Figure, validateFigureStartCoord )
+      Figure, validateFigureStartCoord, centerFigureTopLeft )
 
 ----
 
@@ -162,7 +162,7 @@ initGame :: (HasCallStack, StatefulGen g m) => g -> m Game
 initGame gen = do
   let _board =
         array
-          (V2 0 0, V2 (boardSize - 1) (boardSize - 1))
+          (zeroCoord, V2 (boardSize - 1) (boardSize - 1))
           [(V2 x y, Free) | x <- [0 .. boardSize - 1], y <- [0 .. boardSize - 1]]
   boardFigures <- randomFigures gen
   let justFigures = Just <$> boardFigures
@@ -290,7 +290,8 @@ clickableFigureAction :: Game -> FigureIndex -> Maybe (Action, Game)
 clickableFigureAction game figureIx = do
   fig <- tryFindNextFigureToSelect (game ^. currentGame . board) (game ^. currentGame . figures) [figureIx]
   let (FigureInSelection figureItself _) = fig
-  let coord = fromMaybe zeroCoord $ listToMaybe $ pointsWhereFigureCanBePlaced figureItself (game ^. currentGame . board)
+  let center = centerFigureTopLeft (game ^. currentGame . board) figureItself
+  let coord = fromMaybe center $ listToMaybe $ pointsWhereFigureCanBePlaced figureItself (game ^. currentGame . board)
   let game' = updateCurrentNotVersioned game $ state .~ PlacingFigure fig coord
   pure (Click $ SelectFigureClickable figureIx, game')
 
@@ -375,7 +376,8 @@ possibleActionsImpl gen game generateAutoPlay = do
         pure (action, game')
 
       startPlacing = do
-        let coord = fromMaybe zeroCoord $ listToMaybe $ pointsWhereFigureCanBePlaced selectedFigure (game ^. currentGame . board)
+        let center = centerFigureTopLeft (game ^. currentGame . board) selectedFigure
+        let coord = fromMaybe center $ listToMaybe $ pointsWhereFigureCanBePlaced selectedFigure (game ^. currentGame . board)
         let game' = updateCurrentNotVersioned game $ state .~ PlacingFigure figure coord
         pure (UserAction StartPlacingFigure, game')
 

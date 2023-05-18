@@ -49,9 +49,7 @@ stack test --test-arguments "--tui"
 ### Must have
 
 - [ ] Package and publish (to Hackage?)
-- [ ] Save and restore the state
 
 ### Nice to have
 
-- [ ] Mouse support
-- [ ] Store the RNG in the game state
+- [ ] Initialize the game with a custom seed
